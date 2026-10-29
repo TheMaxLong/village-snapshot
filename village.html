@@ -1254,12 +1254,14 @@ const cropGeo = (() => { const g = new Geo(), c = PAL.green;
 let cropMesh = null;
 const lin3 = h => { const c = new THREE.Color(h); return [c.r, c.g, c.b]; };   // THREE.Color converts sRGB hex to linear
 // a stage's look (spec: flower grows with frac, flush full and gold-leaning, veg short and bushy, mother medium and bushy,
-// unknown a neutral medium crop, resting bare soil)
+// unknown a neutral medium crop, resting bare soil). A flower room at or past its harvest day (frac 1) takes the ripe look.
 const STAGE_LOOK = { veg: { h: 0.3, w: 1.15, tip: 0, col: '#3e5434' }, mother: { h: 0.6, w: 1.3, tip: 0, col: '#36502f' }, flush: { h: 1, w: 1, tip: 1, col: '#6a5a2c' },
   unknown: { h: 0.5, w: 0.95, tip: 0, col: '#55554d' }, resting: { h: 0, w: 0, tip: 0, col: '#000000' } };
 function stageOf(p) { const st = p?.stage, ph = st?.phase;
-  return ['flower', 'flush', 'veg', 'mother', 'resting', 'unknown'].includes(ph) ? { phase: ph, day: Number.isFinite(st.day) ? st.day : null, frac: Number.isFinite(st.frac) ? clamp(st.frac, 0, 1) : null, program: st.program ?? null } : { phase: 'unknown', day: null, frac: null, program: null }; }
+  const n = v => Number.isFinite(v) ? v : null;
+  return ['flower', 'flush', 'veg', 'mother', 'resting', 'unknown'].includes(ph) ? { phase: ph, day: n(st.day), frac: n(st.frac) != null ? clamp(st.frac, 0, 1) : null, program: st.program ?? null, harvest: n(st.harvest), wk: n(st.wk) } : { phase: 'unknown', day: null, frac: null, program: null, harvest: null, wk: null }; }
 function cropLook(st) {
+  if (st.phase === 'flower' && (st.frac ?? 0) >= 1) return STAGE_LOOK.flush;
   if (st.phase === 'flower') { const f = st.frac ?? 0; return { h: lerp(0.22, 1, f), w: lerp(0.8, 1.02, f), tip: smooth(0.35, 1, f) * 0.75, col: '#2f3d2a' }; }
   return STAGE_LOOK[st.phase] || STAGE_LOOK.unknown;
 }
@@ -1472,18 +1474,22 @@ function makeDemo() {
 }
 // The demo farm, in the feed's exact shape (lab/ecosystem/eco-feed.mjs, the plan's "Payload interface"): buildings are
 // the plots, rooms carry roomKind, order and stage. Invented codes only. Stages cover every phase: flower days across the
-// cycle, a flush, a resting room (no runs in the kept days), a room the feed could not read (unknown).
+// cycle (a number = the rooms page's day, harvest day 61; 61 and past look ripe), a room with no day from the rooms page
+// ('~' = its week read off the program), a flush, a resting room (no active cycle), a room the feed could not read (unknown).
 function demoFarm(cities, add, slug) {
-  const plan = { KL: ['D 1-7', 'D 7-14', 'D 14-21', 'D 21-28', 'rest', 'D 35-42', 'D 42-49', 'Flush'], MN: ['D 56-63', 'D 1-7', 'D 14-21', 'D 28-35', 'D 42-49', '?'], PR: ['D 21-28', 'D 35-42', 'D 49-56', 'D 7-14'] };
-  const veg = { KL: 2, MN: 1, PR: 1 }, mom = { KL: true, MN: true, PR: false };
+  const plan = { KL: [3, 10, 17, 24, 'rest', 38, 45, 61], MN: [62, 2, 15, 29, '~D 42-49', '?'], PR: [22, 36, 'Flush', 9] };
+  const veg = { KL: 2, MN: 1, PR: 1 }, mom = { KL: true, MN: true, PR: false }, HARVEST = 61;
+  const band = d => { const hi = 7 * Math.max(1, Math.ceil(d / 7)); return `D ${hi === 7 ? 1 : hi - 7}-${hi}`; };
   cities.forEach(c => { const id = 'city-' + slug(c), fl = plan[c] || [], n = fl.length + (veg[c] || 0) + (mom[c] ? 1 : 0); let order = 0;
     add({ id, name: c, district: 'facility', kind: 'building', degree: n });
     const room = (name, roomKind, stage) => add({ id: 'room-' + slug(name), name, district: 'facility', kind: 'room', status: 'quiet', building: id, degree: 1, roomKind, order: order++, stage });
-    fl.forEach((code, i) => { const m = /^D (\d+)-(\d+)$/.exec(code), day = m ? +m[2] : null;
-      room(c + (i + 1), 'flower', m ? { phase: 'flower', day, frac: clamp(day / 63, 0, 1), program: code } : code === 'Flush' ? { phase: 'flush', day: null, frac: 1, program: code }
+    fl.forEach((code, i) => { const m = /^~D (\d+)-(\d+)$/.exec(code), r = (x) => Math.round(x * 1000) / 1000;
+      room(c + (i + 1), 'flower', typeof code === 'number' ? { phase: 'flower', day: code, frac: r(clamp(code / HARVEST, 0, 1)), program: band(code), harvest: HARVEST }
+        : m ? { phase: 'flower', day: null, frac: r(clamp(+m[2] / HARVEST, 0, 1)), program: code.slice(1), harvest: HARVEST, wk: Math.ceil(+m[2] / 7) }
+        : code === 'Flush' ? { phase: 'flush', day: null, frac: 1, program: code }
         : code === 'rest' ? { phase: 'resting', day: null, frac: null, program: null } : { phase: 'unknown', day: null, frac: null, program: null }); });
-    for (let i = 0; i < (veg[c] || 0); i++) room(c + 'V' + (i + 1), 'veg', { phase: 'veg', day: null, frac: null, program: 'DRIP VEG' });
-    if (mom[c]) room(c + 'MOM', 'mother', { phase: 'mother', day: null, frac: null, program: 'DRIP VEG' }); });
+    for (let i = 0; i < (veg[c] || 0); i++) room(c + 'V' + (i + 1), 'veg', { phase: 'veg', day: 6 + 5 * i, frac: null, program: 'DRIP VEG' });
+    if (mom[c]) room(c + 'MOM', 'mother', { phase: 'mother', day: 40, frac: null, program: 'DRIP VEG' }); });
 }
 // three kept days of runs ending the day before the demo's "now" (local clock, so the replay reads the same anywhere):
 // each watered flower room 7 runs a day, each building's veg tank 3; a few readings missing (shown "—")
@@ -1694,9 +1700,12 @@ function placeTags(st) {
 const camRight = new THREE.Vector3();
 const plotOfB = b => b?.form === 'plot' ? b : b?.form === 'section' ? b.plot : null;
 const sameFarmPlot = (b, id) => { const a = plotOfB(b), o = plotOfB(world.bs.get(id)); return !!a && a === o; };
-// a stage in plain words: short for a tag, long for the hover and the card (never an invented day)
-const stageShort = st => st.phase === 'flower' ? (st.day != null ? 'day ' + st.day : 'flower') : st.phase === 'unknown' ? 'unknown' : st.phase;
-const stageLong = st => st.phase === 'flower' ? `flower${st.day != null ? ' · day ' + st.day : ''}` : st.phase === 'unknown' ? 'stage unknown' : st.phase === 'flush' ? 'flush (ripe)' : st.phase;
+// a stage in plain words: short for a tag, long for the hover and the card (never an invented day). The day is the rooms
+// page's (load day = Day 0); a week read off the program code is only approximate and says so ("~wk 7"), never "day".
+const stageShort = st => st.phase === 'flower' ? (st.day != null ? 'day ' + st.day : st.wk != null ? '~wk ' + st.wk : 'flower')
+  : st.phase === 'veg' && st.day != null ? 'veg day ' + st.day : st.phase === 'unknown' ? 'unknown' : st.phase;
+const stageLong = st => st.phase === 'flower' ? (st.day != null ? `day ${st.day}${st.harvest ? ' of ' + st.harvest : ''}` : st.wk != null ? `~wk ${st.wk} (approximate)` : 'flower')
+  : (st.phase === 'veg' || st.phase === 'mother') && st.day != null ? `${st.phase} day ${st.day}` : st.phase === 'unknown' ? 'stage unknown' : st.phase === 'flush' ? 'flush (ripe)' : st.phase;
 
 // ---------- HUD, stamp, card ----------
 const hud = { crumb: document.getElementById('crumb'), stats: document.getElementById('stats'), stamp: document.getElementById('stamp'), legend: document.getElementById('legend') };
@@ -1789,13 +1798,15 @@ function runsTable(rows) {
 }
 function farmHead(b) {
   const plot = plotOfB(b), secs = plot.farmland.secs;
-  if (b.form === 'section') { const st = b.stage || stageOf(b.p); return { k: `${plot.p.name} · room`, name: b.p.name, sub: stageLong(st) + (st.program && st.phase !== 'unknown' ? ` (${st.program})` : '') }; }
+  if (b.form === 'section') { const st = b.stage || stageOf(b.p), prog = st.program && st.phase !== 'unknown' ? st.program : null;
+    return { k: `${plot.p.name} · room`, name: b.p.name, sub: stageLong(st) + (prog ? ` (${prog})` : ''), card: stageLong(st),
+      detail: prog ? `program ${prog}` + (st.day == null && st.wk != null ? ' — no day from the rooms page, so the week is read off the program' : '') : '' }; }
   const by = new Map(); for (const s of secs) { const ph = (s.stage || stageOf(s.p)).phase; by.set(ph, (by.get(ph) || 0) + 1); }
   return { k: 'Facility · plot', name: plot.p.name, sub: `${secs.length} room${secs.length === 1 ? '' : 's'}` + (secs.length ? ' · ' + [...by].map(([ph, n]) => `${n} ${ph === 'unknown' ? 'stage unknown' : ph}`).join(' · ') : '') };
 }
 function farmCard(b) {
   const h = farmHead(b), runs = plotRuns(plotOfB(b)), shown = cardMore ? runs : runs.slice(0, 3);
-  return `<div class="k">${esc(h.k)}</div><h2>${esc(h.name)}</h2><div class="sub">${esc(h.sub)}</div>` +
+  return `<div class="k">${esc(h.k)}</div><h2>${esc(h.name)}</h2><div class="sub">${esc(h.card ?? h.sub)}</div>` + (h.detail ? `<div class="note">${esc(h.detail)}</div>` : '') +
     `<div class="sec"><h4>${cardMore ? `all kept runs · ${runs.length}` : 'last runs'} · ${esc(plotOfB(b).p.name)}</h4>` +
     (runs.length ? (cardMore ? `<div class="runsBox">${runsTable(shown)}</div>` : runsTable(shown)) : '<div class="note">No runs kept yet.</div>') +
     (runs.length > 3 ? `<div class="acts"><button class="btn" data-more type="button">${cardMore ? 'fewer runs' : `more runs (${runs.length})`}</button></div>` : '') +
