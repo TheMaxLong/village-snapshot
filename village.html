@@ -50,7 +50,7 @@ canvas { display: block; position: absolute; left: 0; top: 0; }
 #legend .k { font: 700 9px Menlo, monospace; letter-spacing: .16em; color: var(--faint); text-transform: uppercase; display: block; margin-bottom: 3px; }
 #legend b { color: #fff; font-weight: 650; }
 #legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 4px 0 2px; vertical-align: 0; }
-#views { position: absolute; right: 14px; bottom: 14px; z-index: 5; display: flex; gap: 6px; }
+#views { position: absolute; right: 14px; bottom: 14px; z-index: 5; display: flex; gap: 6px; will-change: transform; }   /* its own layer: squashed with the moving tags, its corners rasterised differently by render order */
 #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
 .tag { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: auto; cursor: pointer; background: var(--red); color: #000; border: 1px solid #000;
   font: 500 12px/1 var(--tagf); letter-spacing: -.01em; padding: 3px 4px 2px; }   /* 500, not 300: the black on red reads thicker (Max 10/29); the tracking and a px of padding give back the width the weight adds */
@@ -64,6 +64,19 @@ canvas { display: block; position: absolute; left: 0; top: 0; }
   font: 600 15px/1 var(--tagf); letter-spacing: .2em; text-transform: uppercase; padding: 5px 7px 4px 9px; outline: 1px solid rgba(242,240,234,.35); outline-offset: 2px; }
 .dtag small { display: block; margin-top: 4px; font: 600 12px/1 var(--tagf); letter-spacing: .1em; }
 .hid { display: none !important; }
+/* the farm (Max 10/29): the "replaying" clock on the farm, the hover table, the runs table in a card */
+.ctag { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: none; background: rgba(10,10,10,.88); color: var(--gold-solid); border: 1px solid rgba(214,176,87,.55);
+  font: 700 9.5px/1 Menlo, monospace; letter-spacing: .1em; text-transform: uppercase; padding: 4px 6px 3px; }
+#farmTip { left: 0; top: 0; width: 300px; padding: 9px 11px 10px; display: none; pointer-events: none; z-index: 6; font-size: 12px; }
+#farmTip .k, #card .runs th { font: 700 8.5px Menlo, monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+#farmTip b { font-size: 14px; font-weight: 700; }
+#farmTip .st { color: var(--dim); }
+#farmTip .note { margin-top: 6px; font-size: 10.5px; color: var(--dim); }
+table.runs { width: 100%; border-collapse: collapse; margin-top: 6px; font: 11px/1.35 Menlo, monospace; font-variant-numeric: tabular-nums; }
+table.runs th { text-align: left; font: 700 8.5px Menlo, monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); padding: 0 4px 3px 0; border-bottom: 1px solid var(--line); }
+table.runs td { padding: 3px 4px 2px 0; color: rgba(255,255,255,.86); white-space: nowrap; border-bottom: 1px solid rgba(255,255,255,.05); }
+table.runs td.n, table.runs th.n { text-align: right; }
+.runsBox { max-height: 260px; overflow: auto; overscroll-behavior: contain; }
 #bubble { position: absolute; left: 0; top: 0; z-index: 4; max-width: 300px; background: #f2f0ea; color: #0a0a0a; border: 1px solid #000; border-radius: 2px; padding: 6px 9px 7px;
   font: 12px/1.35 system-ui, sans-serif; pointer-events: none; display: none; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
 #bubble::after { content: ""; position: absolute; left: 14px; bottom: -7px; border: 7px solid transparent; border-bottom: 0; border-top-color: #f2f0ea; }
@@ -110,6 +123,9 @@ body.bare #header, body.bare #stamp, body.bare #legend, body.bare #views, body.b
     padding: 16px calc(18px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left)); }
   #card h2 { margin-right: 40px; }
   #card .btn { min-height: 40px; }
+  table.runs { font-size: 10.5px; } table.runs td, table.runs th { padding-right: 3px; }
+  .runsBox { max-height: 30dvh; }
+  #farmTip { display: none !important; }   /* a phone has no hover: a tap opens the card */
   .tag { font-size: 11px; padding: 3px 4px 2px; } .tag.big { font-size: 11.5px; }
   .dtag { font-size: 11.5px; letter-spacing: .16em; padding: 4px 5px 3px 7px; outline-offset: 1px; }
   .dtag small { margin-top: 3px; font-size: 9.5px; letter-spacing: .1em; }
@@ -146,6 +162,7 @@ body.bare #header, body.bare #stamp, body.bare #legend, body.bare #views, body.b
 </div>
 <div id="stamp"></div>
 <div id="card" class="panel"></div>
+<div id="farmTip" class="panel"></div>
 <div id="scrim"></div>
 <div id="legend" class="panel"></div>
 <div id="views"><button class="btn" data-view="overview" type="button">Overview</button><button class="btn" data-view="street" type="button">Street</button></div>
@@ -276,16 +293,21 @@ terrainMat.onBeforeCompile = sh => {
     vec4 diffuseColor = vec4(col, opacity);`);
 };
 // buildings: one Standard material (gold needs the environment), patterns by a vertex attribute
-const lampU = { value: 0 }, lampLitU = { value: 0 };
+const lampU = { value: 0 }, lampLitU = { value: 0 }, FARM_SEC_D = '11.9';   // = FARM.secD (the shader needs it before FARM exists)
+// the farm's soil: one value per section (pattern 100 + section index): wetness 0..1, plus 2 when the room is resting
+// (bare soil). 32 vec4 = 128 sections, written every frame by the replay. farmT / farmP: the canal ripples' clock.
+// farmFill: how far down its furrows each section's water has run (0..1); farmPlot: each plot's reservoir drawdown (0..1)
+const MAX_SEC = 128, MAX_PLOTS = 32, farmSecU = { value: new Float32Array(MAX_SEC) }, farmFillU = { value: new Float32Array(MAX_SEC) }, farmPlotU = { value: new Float32Array(MAX_PLOTS) }, farmTU = { value: 0 }, farmPU = { value: 40 };
 function buildingMaterial(lamp) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0, envMapIntensity: 0.5 });
   m.onBeforeCompile = sh => {
-    sh.uniforms.lamp = lamp;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float pat; attribute vec2 puv; varying float vPat; varying vec2 vPuv;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPat = pat; vPuv = puv;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vPat; varying vec2 vPuv; uniform float lamp;' + glslNoise)
+    Object.assign(sh.uniforms, { lamp, farmSec: farmSecU, farmFill: farmFillU, farmPlot: farmPlotU, farmT: farmTU, farmP: farmPU });
+    // a reservoir's water (pattern 300 + plot index) sinks with its plot's drawdown
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float pat; attribute vec2 puv; varying float vPat; varying vec2 vPuv; uniform vec4 farmPlot[8];')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPat = pat; vPuv = puv; if (pat > 299.5 && pat < 331.5) { int pi = int(pat + 0.5) - 300; transformed.y -= 0.3 * farmPlot[pi / 4][pi - (pi / 4) * 4]; }');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vPat; varying vec2 vPuv; uniform float lamp; uniform vec4 farmSec[32]; uniform vec4 farmFill[32]; uniform float farmT; uniform float farmP;' + glslNoise)
       .replace('vec4 diffuseColor = vec4( diffuse, opacity );', `
-      vec4 diffuseColor = vec4(diffuse, opacity); float sh2 = 1.0; vec3 emis = vec3(0.0); int pt = int(vPat + 0.5); vec2 u = vPuv; float goldK = 0.0;
+      vec4 diffuseColor = vec4(diffuse, opacity); float sh2 = 1.0; vec3 emis = vec3(0.0); int pt = int(vPat + 0.5); vec2 u = vPuv; float goldK = 0.0, wetK = 0.0, waterK = 0.0;
       if (pt == 1) { sh2 = (0.93 + 0.1 * vn(u * 3.0)) * (0.985 + 0.03 * sin(u.x * 7.0 + vn(u * 2.0) * 3.0)); }
       else if (pt == 2) { vec2 t = u * vec2(2.8, 3.4); float row = floor(t.y); float x = t.x + mod(row, 2.0) * 0.5;
         vec2 f = vec2(fract(x) - 0.5, fract(t.y)); float d = length(vec2(f.x, (f.y - 0.62) * 1.25));
@@ -305,8 +327,29 @@ function buildingMaterial(lamp) {
       else if (pt == 10) { float rw = abs(fract(u.x * 1.6) - 0.5); float crop = 1.0 - smoothstep(0.16, 0.3, rw); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.025, 0.04, 0.02), crop * 0.9) * (0.9 + 0.15 * vn(u * vec2(1.0, 6.0))); }
       else if (pt == 11) { vec2 f = fract(u * vec2(1.4, 1.1)); float mull = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)); float gl = smoothstep(0.02, 0.06, mull);
         sh2 = mix(1.6, 0.9, gl); emis = lamp * gl * vec3(0.9, 0.72, 0.42) * 0.7; }
+      else if (pt == 13 || (pt >= 300 && pt < 332)) { waterK = 1.0; diffuseColor.rgb = lin(vec3(0.026, 0.024, 0.02)) * (0.9 + 0.2 * vn(u * 1.7));
+        // still water reads on black by its glints: white-gold, moving on whole cycles of the loop
+        // two value noises drifting on closed circles (whole turns per loop), their product thresholded: sparse glints
+        float tp = 6.2832 * farmT / farmP, gl = vn(u * 1.9 + 1.6 * vec2(cos(3.0 * tp), sin(3.0 * tp))) * vn(u * 3.1 + 1.3 * vec2(sin(5.0 * tp), cos(5.0 * tp)) + 7.0);
+        emis += vec3(0.95, 0.66, 0.24) * 0.3 + vec3(1.0, 0.92, 0.72) * 0.55 * smoothstep(0.42, 0.75, gl); }   // gold water, white glints
+      else if (pt >= 400) {   // a furrow (puv: across 0..1, along 0..1 from the lane end): water runs down it to farmFill, white-gold
+        int si = min(pt - 400, ${MAX_SEC - 1}); float v = farmSec[si / 4][si - (si / 4) * 4], fill = farmFill[si / 4][si - (si / 4) * 4];
+        float wet = clamp(v - 2.0 * step(1.5, v), 0.0, 1.0), w = wet * wet * wet * smoothstep(fill + 0.02, fill - 0.04, u.y) * smoothstep(0.0, 0.25, min(u.x, 1.0 - u.x));
+        float head = smoothstep(fill - 0.12, fill, u.y) * step(u.y, fill) * step(0.5, wet);
+        diffuseColor.rgb = mix(lin(vec3(0.1, 0.085, 0.07)), lin(vec3(0.55, 0.5, 0.4)), w); waterK = w;
+        emis += vec3(1.0, 0.88, 0.6) * w * (0.32 + 0.9 * head); }
+      else if (pt >= 100) { int si = min(pt - 100, ${MAX_SEC - 1}); float v = farmSec[si / 4][si - (si / 4) * 4], fill = farmFill[si / 4][si - (si / 4) * 4];
+        float rest = step(1.5, v), wet = clamp(v - 2.0 * rest, 0.0, 1.0), fur = abs(fract(u.x * 1.14) - 0.5);
+        wet *= smoothstep(fill + 0.06, fill - 0.06, 1.0 - u.y / ${FARM_SEC_D});   // the soil darkens behind the water's front
+        vec3 soil = mix(lin(vec3(0.2, 0.17, 0.14)), lin(vec3(0.44, 0.4, 0.34)), rest) * (0.78 + 0.34 * smoothstep(0.08, 0.3, fur)) * (0.9 + 0.16 * vn(u * 3.1));
+        diffuseColor.rgb = soil * mix(1.0, 0.42, wet); wetK = wet; }
       diffuseColor.rgb *= sh2; emis += goldK * diffuseColor.rgb * 0.32;`)
-      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = mix(metalnessFactor, 1.0, goldK); roughnessFactor = mix(roughnessFactor, 0.42, goldK);')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = mix(metalnessFactor, 1.0, goldK); roughnessFactor = mix(roughnessFactor, 0.42, goldK); roughnessFactor = mix(roughnessFactor, 0.34, wetK); roughnessFactor = mix(roughnessFactor, 0.85, waterK);')
+      // canal water: the light ripple normal of the ocean v1 recipe, four small waves on whole cycles per loop (seam-clean)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      if (waterK > 0.5 && pt < 400) { vec2 gs = vec2(0.0); vec2 dd[4]; dd[0] = vec2(0.8, 0.6); dd[1] = vec2(-0.5, 0.86); dd[2] = vec2(0.96, -0.28); dd[3] = vec2(-0.2, -0.98);
+        for (int i = 0; i < 4; i++) { float k = 3.1 + 1.7 * float(i), n = float(7 + 4 * i); gs += dd[i] * k * 0.0045 * cos(dot(dd[i], vPuv) * k - 6.2832 * n * farmT / farmP); }
+        normal = normalize(normal - (viewMatrix * vec4(gs.x, 0.0, gs.y, 0.0)).xyz); }`)
       .replace('vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = emissive + emis;');
   };
   m.customProgramCacheKey = () => 'eco-building';
@@ -692,6 +735,32 @@ const F = {
     for (let i = 0; i <= 4; i++) g.cyl(-L / 2 + i * L / 4, 0.5, 0, r + 0.03, r + 0.03, 0.001, 1, PAL.marble, 0, { cap: false });
     g.box(L / 2 + 0.3, 0, 0, 0.26, 0.2, r * 2, PAL.water, 0);
     b.top = 0.5 + r + 1.1; b.hw = L / 2 + 0.4; b.hd = r; b.lit = true; b.canal = [L / 2 + 0.3, -r + 0.1, L / 2 + 0.3, r - 0.1]; b.work = [0, r + 0.9]; },
+  // the farm (Max 10/29): a building is a plot, drawn in its own frame (front edge = the canal side, local -z; column 0
+  // nearest the tower). At its head a stepped reservoir (pattern 300 + plot index: its water sinks as the plot draws on
+  // it); a header ditch along the front from the reservoir's outlet; a lane down each column; the rooms are soil strips
+  // (pattern 100 + section index) with furrows between the plant rows (pattern 400 + section index: they fill on a run)
+  plot(g, b) { const f = b.farmland, A = FARM, W = f.W, D = f.D, fx = v => f.sgn * (v - W / 2);
+    g.box(0, -0.3, 0, W, 0.36, D, PAL.wood, 1);
+    for (const s of [-1, 1]) { g.box(0, 0, s * (D / 2 - 0.16), W, 0.28, 0.32, PAL.mud, 8); g.box(s * (W / 2 - 0.16), 0, 0, 0.32, 0.28, D, PAL.mud, 8); }
+    // the reservoir: walls, two steps down inside, gold coping on the canal side, the water
+    const rx = fx(A.rim + A.res / 2), rw = A.res - 0.5, rd = D - 2 * A.rim - 0.4;
+    for (const s of [-1, 1]) { g.box(rx, 0, s * (rd / 2 - 0.2), rw, 0.62, 0.4, PAL.mud, 8); g.box(rx + s * (rw / 2 - 0.2), 0, 0, 0.4, 0.62, rd, PAL.mud, 8);
+      g.box(rx, 0, s * (rd / 2 - 0.55), rw - 0.8, 0.4, 0.32, PAL.mud2, 8); g.box(rx + s * (rw / 2 - 0.55), 0, 0, 0.32, 0.4, rd - 0.8, PAL.mud2, 8); }
+    g.box(rx, 0.62, -rd / 2 + 0.2, rw + 0.06, 0.07, 0.44, PAL.gold, 9);
+    g.box(rx, 0, 0, rw - 0.4, 0.06, rd - 0.4, PAL.bitumen, 1);
+    { const x0 = rx - (rw - 0.5) / 2, x1 = rx + (rw - 0.5) / 2, z0 = -rd / 2 + 0.3, z1 = rd / 2 - 0.3; g.quad([x0, 0.52, z1], [x1, 0.52, z1], [x1, 0.52, z0], [x0, 0.52, z0], PAL.water, 300 + b.pi, [0, 0, x1 - x0, 0, x1 - x0, z1 - z0, 0, z1 - z0]); }
+    const hz = -D / 2 + A.head * 0.5, h0 = A.rim + A.res, hl = W - h0 - A.rim;
+    g.box(fx(h0 + hl / 2), 0, hz, hl, 0.1, 0.55, PAL.water, 13); for (const s of [-1, 1]) g.box(fx(h0 + hl / 2), 0, hz + s * 0.38, hl, 0.2, 0.2, PAL.mud3, 8);
+    g.box(fx(h0 - 0.1), 0, hz, 0.4, 0.66, 0.9, PAL.gold, 9);   // the outlet's gold sluice
+    for (let c = 0; c < f.cols; c++) { const lx = fx(h0 + c * f.pitch + A.lane / 2), z0 = hz + 0.3, z1 = -D / 2 + A.head + f.rows * A.secD + (f.rows - 1) * A.rowGap;
+      g.box(lx, 0, (z0 + z1) / 2, A.lane * 0.6, 0.19, z1 - z0, PAL.water, 13); }
+    for (const s of f.secs) { const si = Math.min(s.si, MAX_SEC - 1);
+      g.box(s.farmland.lx, 0, s.farmland.lz, A.secW, 0.16, A.secD, PAL.mud3, 8, { top: PAL.soil, topPat: 100 + si });
+      for (const k of furrowXs(s)) { const x0 = k - 0.13, x1 = k + 0.13, z0 = s.farmland.lz - A.secD / 2 + 0.15, z1 = s.farmland.lz + A.secD / 2 - 0.15;   // uv: across, along from the front
+        g.quad([x0, 0.171, z1], [x1, 0.171, z1], [x1, 0.171, z0], [x0, 0.171, z0], PAL.water, 400 + si, [0, 1, 1, 1, 1, 0, 0, 0]); } }
+    b.top = 1.2; b.hw = W / 2; b.hd = D / 2; },
+  // a room is a strip inside its plot: the plot draws it
+  section(g, b) { b.top = FARM.cropH + 0.5; b.hw = FARM.secW / 2; b.hd = FARM.secD / 2; b.work = [-FARM.secW / 2 * b.plot.farmland.sgn - 0.35 * b.plot.farmland.sgn, 0]; },
   mill(g, b) { F.mudHouse(g, { R: Math.min(b.R, 2.4), hs: b.hs, s: b.s }); const R = Math.min(b.R, 2.4);
     g.box(0, -0.2, R * 0.95, R * 1.6, 0.3, 0.9, PAL.water, 0);
     g.wheel(R * 0.62, 1.2, R * 0.6, 1.15, 0.3, 12, PAL.wood, 5);
@@ -747,7 +816,7 @@ const F = {
 const FORM_LABEL = { shrine: 'small building', fountain: 'fountain', stoa: 'long hall', tholos: 'round hall', smallTemple: 'small hall', temple: 'hall with columns', odeon: 'small theatre',
   arch: 'arch', basilica: 'great hall', theatre: 'theatre', pharos: 'lighthouse tower', colosseum: 'arena', forum: 'town square', domus: 'house', reedHut: 'hut',
   mudHouse: 'small house', granary: 'storehouse', beacon: 'beacon tower', shaduf: 'water channel', cityGate: 'city gate', scribalSchool: 'school', palace: 'big hall',
-  platformTemple: 'raised hall', terraceGarden: 'terraced garden', ishtarGate: 'great gate', ziggurat: 'main tower', field: 'field', greenhouse: 'greenhouse', mill: 'mill',
+  platformTemple: 'raised hall', terraceGarden: 'terraced garden', ishtarGate: 'great gate', ziggurat: 'main tower', field: 'field', greenhouse: 'greenhouse', plot: 'plot', section: 'room', mill: 'mill',
   forge: 'workshop', alexandria: 'library', ashurbanipal: 'library', square: 'square', misfitHut: 'hut' };
 
 // ---------- tiers (payload's, with hysteresis), forms and footprints ----------
@@ -769,8 +838,8 @@ function formOf(p, ctx) {
   const culture = cultureOf(p.district);
   if (p.kind === 'hut' || culture === 'misfit') return 'misfitHut';
   if (p.kind === 'house') return culture === 'meso' ? 'mudHouse' : 'domus';
-  if (p.kind === 'room') return hashStr(p.id) % 3 === 0 ? 'greenhouse' : 'field';
-  if (p.kind === 'building') return culture === 'meso' ? 'palace' : 'forum';
+  if (p.kind === 'room') return p.building && ctx.plots?.has(p.building) ? 'section' : hashStr(p.id) % 3 === 0 ? 'greenhouse' : 'field';   // a room without a building keeps its old field
+  if (p.kind === 'building') return FACILITY_IDS.has(p.district) ? 'plot' : culture === 'meso' ? 'palace' : 'forum';
   if (p.id === ctx.ziggurat) return 'ziggurat';
   if (p.id === ctx.colosseum) return 'colosseum';
   if (p.kind === 'machine') return t >= 4 ? 'beacon' : pick(p.id, ['beacon', 'mill', 'forge']);
@@ -824,8 +893,8 @@ function buildWorld(d) {
   const byDeg = (a, b) => (b.degree - a.degree) || (a.id < b.id ? -1 : 1);
   const zig = places.filter(p => p.kind === 'machine' && FACILITY_IDS.has(p.district) && p._tier === 5).sort(byDeg)[0];
   const col = places.filter(p => p._tier === 5 && !FACILITY_IDS.has(p.district) && p.kind !== 'library' && p.kind !== 'square').sort(byDeg)[0];
-  const ctx = { ziggurat: zig?.id, colosseum: col?.id };
-  const bs = new Map();
+  const ctx = { ziggurat: zig?.id, colosseum: col?.id, plots: new Set(places.filter(p => p.kind === 'building' && FACILITY_IDS.has(p.district)).map(p => p.id)) };
+  const bs = new Map(); let farm = null;
   for (const p of places) { const form = formOf(p, ctx), R = footprintOf(p, form); bs.set(p.id, { id: p.id, p, form, R, s: p.scale || 1, hs: Math.pow(p.scale || 1, 1.15), tier: p._tier || 1 }); }
   // districts: each one's radius from the area of what stands in it, plus a ring kept free for session houses
   const dl = d.districts.map(x => ({ ...x, items: [] }));
@@ -837,17 +906,18 @@ function buildWorld(d) {
     x.x = 0; x.z = 0;
     const sorted = [...x.items].sort((a, b) => (b.R - a.R) || (b.p.degree - a.p.degree) || (a.id < b.id ? -1 : 1));
     if (x.kind === 'facility') {
-      const big = sorted.filter(b => b.p.kind !== 'room' && b.p.kind !== 'machine'), mains = sorted.filter(b => b.p.kind === 'machine' && b.id === ctx.ziggurat);
+      // the farm: the main tower at the head of one canal, the plots (buildings) either side of it, their rooms inside them
       const placed = [];
-      spiralPlace(mains, x, 1e9, placed, hashStr(x.id));
+      farm = layoutFarm(x, sorted, ctx, placed);
+      const big = sorted.filter(b => b.p.kind !== 'room' && b.p.kind !== 'machine' && b.form !== 'plot');
       spiralPlace(big, x, 1e9, placed, hashStr(x.id) + 1);
-      const rooms = sorted.filter(b => b.p.kind === 'room').sort((a, b) => String(a.p.building).localeCompare(String(b.p.building)) || (a.id < b.id ? -1 : 1));
-      for (const r of rooms) { const hb = bs.get(r.p.building); r.near = hb && hb.x != null ? { x: hb.x, z: hb.z } : null; }
-      spiralPlace(rooms, x, 1e9, placed, hashStr(x.id) + 2);
+      const rooms = sorted.filter(b => b.p.kind === 'room' && b.form !== 'section');   // rooms with no building: their old fields, outside the farm
+      if (!farm) spiralPlace(rooms, x, 1e9, placed, hashStr(x.id) + 2);
       const others = sorted.filter(b => b.p.kind === 'machine' && b.id !== ctx.ziggurat);
-      const filled = Math.max(8, ...placed.map(b => Math.hypot(b.x, b.z) + b.R));
-      others.forEach((b, i) => { const a = i / Math.max(1, others.length) * tau + 0.3; b.near = { x: Math.cos(a) * (filled + b.R + 1), z: Math.sin(a) * (filled + b.R + 1) }; });
-      spiralPlace(others, x, 1e9, placed, hashStr(x.id) + 3);
+      if (farm) x.farmWall = wallRound(farm, [...rooms, ...others], placed, hashStr(x.id) + 3);   // the wall hugs the farm (Max 10/29: spread it out)
+      else { const filled = Math.max(8, ...placed.map(b => Math.hypot(b.x, b.z) + b.R));
+        others.forEach((b, i) => { const a = i / Math.max(1, others.length) * tau + 0.3; b.near = { x: Math.cos(a) * (filled + b.R + 1), z: Math.sin(a) * (filled + b.R + 1) }; });
+        spiralPlace(others, x, 1e9, placed, hashStr(x.id) + 3); }
     } else {
       const fixed = sorted.filter(b => b.form === 'square' || b.form === 'alexandria' || b.form === 'ashurbanipal');
       const placed = [];
@@ -857,7 +927,7 @@ function buildWorld(d) {
       spiralPlace(sorted.filter(b => !fixed.includes(b)), x, 1e9, placed, hashStr(x.id));
     }
     // the district's real radius: what it holds, plus a ring for session houses (and the facility's wall)
-    x.R = Math.max(13, Math.max(0, ...x.items.map(b => Math.hypot(b.x, b.z) + b.R)) + (x.kind === 'facility' ? 6 : 6.5));
+    x.R = x.farmWall ?? Math.max(13, Math.max(0, ...x.items.map(b => Math.hypot(b.x, b.z) + b.R)) + (x.kind === 'facility' ? 6 : 6.5));
   }
   const pole = dl.find(x => x.kind === 'pole' || x.kind === 'island') || dl[0];
   pole.x = 0; pole.z = 0;
@@ -893,8 +963,20 @@ function buildWorld(d) {
   }
   const landMargin = LR - Math.max(...dl.map(x => Math.hypot(x.x, x.z) + x.R));
   for (const x of dl) for (const b of x.items) { b.x += x.x; b.z += x.z; if (b.near) b.near = null; }
-  // facing: toward the district centre (the facility's toward its main hub), square and library toward each other
+  if (farm) { farm.sx += farm.d.x; farm.z0 += farm.d.z; farm.z1 += farm.d.z;
+    // the canal runs away from the square: when the square lies down-canal, the farm is mirrored (z about the district's
+    // centre), so the facility's road leaves from the back of the main tower and never crosses a plot
+    const sq = bs.get('square');
+    if (sq && sq.z > farm.d.z) { const cz = farm.d.z, m = z => 2 * cz - z;
+      for (const b of farm.d.items) b.z = m(b.z);   // the whole quarter, so nothing else lands on a plot
+      if (farm.main) farm.main.rot = Math.PI;
+      for (const b of farm.plots) { b.farmland.sgn = -b.farmland.sgn; if (b.farmland.cap) b.rot = Math.PI; }
+      farm.z0 = m(farm.z0); farm.z1 = m(farm.z1); farm.flip = true;
+      for (const s of farm.secs) placeSection(s); } }
+  // facing: toward the district centre (the facility's toward its main hub), square and library toward each other; the
+  // farm keeps its own frame (the main tower faces down its canal, plots face the canal)
   for (const b of bs.values()) {
+    if (b.farmed) continue;
     const x = byD.get(b.p.district) || pole, cx = x.x, cz = x.z;
     const fx = b.form === 'ashurbanipal' || b.form === 'alexandria' ? (bs.get('square')?.x ?? cx) : cx, fz = b.form === 'ashurbanipal' || b.form === 'alexandria' ? (bs.get('square')?.z ?? cz) : cz;
     b.rot = Math.hypot(fx - b.x, fz - b.z) < 0.5 ? Math.atan2(-b.x, -b.z) : Math.atan2(fx - b.x, fz - b.z);
@@ -909,7 +991,106 @@ function buildWorld(d) {
   const X0 = Math.min(bx0, ex[0]), X1 = Math.max(bx1, ex[1]), Z0 = Math.min(bz0, ex[2]), Z1 = Math.max(bz1, ex[3]);
   const fit = { cx: (X0 + X1) / 2, cz: (Z0 + Z1) / 2, r: Math.max(X1 - X0, Z1 - Z0) / 2 + 6 };
   const ext = landR + (island ? 48 : 34);
-  return { districts: dl, byD, bs, ctx, landR, island, ext, pole, fit };
+  return { districts: dl, byD, bs, ctx, landR, island, ext, pole, fit, farmland: farm };
+}
+// ---------- the farm (Max 10/29: "one farm … a plot per building divided into a section per room") ----------
+// Units are world units (a villager is ~1.7 tall). FARM.cropH is a full-grown flower room's plants; the stage's frac
+// (computed in the feed from the private flowerDays knob) scales it, so the page never needs the cycle length.
+const FARM = { secW: 8.1, lane: 1.5, secD: +FARM_SEC_D, rowGap: 1.2, head: 2.8, rim: 1.0, res: 8.4, cistR: 7.5, spineW: 4.4, bank: 3.6, plotGap: 5.0, cropH: 1.7, maxPlants: 3000, plantCols: 7, plantScale: [1.25, 1.12] };   // plantScale: a plant's width and height for these strips
+FARM.pitch = FARM.secW + FARM.lane;
+// a section's furrows: between its plant columns (plot-local x), the plants stand in FARM.plantCols columns
+const furrowXs = s => { const n = FARM.plantCols, out = []; for (let a = 1; a < n; a++) out.push(s.farmland.lx + (a / n - 0.5) * (FARM.secW - 0.6)); return out; };
+const natural = (a, b) => String(a).localeCompare(String(b), 'en', { numeric: true });
+const secOrder = (a, b) => ((a.p.order ?? 1e9) - (b.p.order ?? 1e9)) || natural(a.p.name, b.p.name);
+// Plots alternate west / east of one canal that runs from the main tower's front toward the viewer (+z), two to a row;
+// each plot's rows and columns are picked to make it as square as can be. Plot-local frame: x across the columns,
+// -z the front (canal side); `sgn` flips x so column 0 is always the one nearest the tower. Everything is laid out round
+// the local origin and then centred, so the district's radius (and its wall) fits the farm.
+function layoutFarm(x, sorted, ctx, placed) {
+  const A = FARM, main = sorted.find(b => b.id === ctx.ziggurat) || null;
+  const plots = sorted.filter(b => b.form === 'plot').sort((a, b) => natural(a.p.name, b.p.name) || (a.id < b.id ? -1 : 1));
+  if (!plots.length) { if (main) spiralPlace([main], x, 1e9, placed, hashStr(x.id)); return null; }
+  const secsOf = new Map(plots.map(b => [b.id, sorted.filter(s => s.form === 'section' && s.p.building === b.id).sort(secOrder)]));
+  // a plot's shape for `cols` columns: W across the columns (along the canal), D outward (rows)
+  const shape = (n, cols) => { const rows = Math.ceil(n / cols); return { cols, rows, W: A.res + cols * A.pitch + 2 * A.rim, D: A.head + rows * A.secD + (rows - 1) * A.rowGap + A.rim }; };
+  const best = (n, want) => { let b = null; for (let c = 1; c <= n; c++) { const sh = shape(n, c), k = want(sh) + 0.01 * c; if (!b || k < b.k) b = { ...sh, k }; } return b; };
+  const top = main ? main.R : 0, cz0 = top + 1.4 + A.cistR, pairs = Math.floor(plots.length / 2), cap = plots.length % 2 ? plots[plots.length - 1] : null;
+  // Pairs face each other across the canal, rows down it; an odd last plot lies across the canal's end. The plots'
+  // proportions (W against D) are searched so the whole farm, tower included, sits as squarely as it can in its round
+  // wall: the smallest circle round its footprint for the ground it covers (the wall then hugs it; Max: spread it out).
+  const trial = ratio => { const L = []; let z = cz0 + A.cistR + 2, xMax = top;
+    for (let k = 0; k < pairs; k++) { const pr = [plots[2 * k], plots[2 * k + 1]].map(b => ({ b, ...best(Math.max(1, secsOf.get(b.id).length), sh => Math.abs(sh.W - ratio * sh.D)) }));
+      pr.forEach((q, j) => { const side = j ? 1 : -1; q.side = side; q.rot = side * Math.PI / 2; q.sgn = -side; q.x = side * (A.spineW / 2 + A.bank + q.D / 2); q.z = z + q.W / 2; xMax = Math.max(xMax, Math.abs(q.x) + q.D / 2); L.push(q); });
+      z += Math.max(...pr.map(q => q.W)) + A.plotGap; }
+    let z1 = z - A.plotGap;
+    if (cap) { const width = pairs ? 2 * xMax : 0, q = { b: cap, ...best(Math.max(1, secsOf.get(cap.id).length), sh => pairs ? Math.abs(sh.W - width) : Math.abs(sh.W - ratio * sh.D)) };
+      z1 = z; q.side = 0; q.rot = 0; q.sgn = 1; q.x = 0; q.z = z + q.D / 2; L.push(q); xMax = Math.max(xMax, q.W / 2); z += q.D; }
+    const zb = cap ? z : z1, cx = 0, cz = (-top + zb) / 2;
+    const pts = L.flatMap(q => { const hx = q.side ? q.D / 2 : q.W / 2, hz = q.side ? q.W / 2 : q.D / 2; return [[q.x - hx, q.z - hz], [q.x + hx, q.z - hz], [q.x - hx, q.z + hz], [q.x + hx, q.z + hz]]; });
+    const R = Math.max(top + Math.abs(cz), ...pts.map(([px, pz]) => Math.hypot(px - cx, pz - cz))), w = 2 * Math.max(xMax, ...pts.map(([px]) => Math.abs(px))), h = zb + top;
+    return { L, cz, z1, score: R * R / (w * h) }; };   // the farm's whole footprint as square as it can be in its round wall
+  let pick = null; for (let r = 0.3; r <= 3.01; r += 0.1) { const t = trial(r); if (!pick || t.score < pick.score) pick = t; }
+  for (const q of pick.L) { const b = q.b, secs = secsOf.get(b.id);
+    b.farmland = { cols: q.cols, rows: q.rows, W: q.W, D: q.D, pitch: A.pitch, secs, side: q.side, sgn: q.sgn, cap: !q.side };
+    b.R = Math.hypot(q.W, q.D) / 2; b.farmed = true; b.rot = q.rot; b.x = q.x; b.z = q.z - pick.cz;
+    secs.forEach((s, i) => { s.plot = b; s.farmed = true; s.R = Math.min(A.secW, A.secD) / 2; s.farmland = { r: Math.floor(i / q.cols), c: i % q.cols }; }); }
+  if (main) { main.x = 0; main.z = -pick.cz; main.rot = 0; main.farmed = true; placed.push(main); }
+  for (const b of plots) placed.push(b);
+  const secs = plots.flatMap(b => b.farmland.secs); secs.forEach((s, i) => { s.si = i; placeSection(s); });
+  plots.forEach((b, i) => { b.pi = Math.min(i, MAX_PLOTS - 1); });
+  return { d: x, main, plots, secs, sx: 0, z0: cz0 - pick.cz, z1: pick.z1 - pick.cz };
+}
+// The walled farm: the wall's radius comes from the farm itself (the plots' far corners, the tower, the cistern), so the
+// farm fills the walled city; the other machines stand in the gaps between the plots and the wall (each one at the wall,
+// clear of every plot's box and of each other), and the wall steps out only when one cannot fit. Local coordinates.
+function plotBox(b) { const f = b.farmland, side = Math.abs(Math.sin(b.rot)) > 0.5, hx = side ? f.D / 2 : f.W / 2, hz = side ? f.W / 2 : f.D / 2; return [b.x - hx, b.z - hz, b.x + hx, b.z + hz]; }
+function wallRound(farm, others, placed, seed) {
+  const boxes = farm.plots.map(plotBox), round = [];
+  let R = Math.max(farm.main ? Math.hypot(farm.main.x, farm.main.z) + farm.main.R : 0, Math.hypot(farm.sx, farm.z0) + FARM.cistR + 1,
+    ...boxes.flatMap(q => [[q[0], q[1]], [q[2], q[1]], [q[0], q[3]], [q[2], q[3]]].map(([x, z]) => Math.hypot(x, z)))) + 2.6;
+  if (farm.main) round.push(farm.main);
+  const clear = (b, x, z) => boxes.every(q => Math.hypot(Math.max(q[0] - x, 0, x - q[2]), Math.max(q[1] - z, 0, z - q[3])) > b.R + 1.4)
+    && round.every(o => Math.hypot(o.x - x, o.z - z) > o.R + b.R + GAP);
+  const a0 = (seed % 628) / 100;
+  for (const b of others) {
+    for (let tries = 0; ; tries++) { const r = R - 2.4 - b.R; let ok = false;
+      for (let i = 0; i < 96 && !ok; i++) { const a = a0 + i * 2.39996, x = Math.cos(a) * r, z = Math.sin(a) * r; if (r > 0 && clear(b, x, z)) { b.x = x; b.z = z; ok = true; } }
+      if (ok || tries > 40) break; R += 1.5; }
+    round.push(b); placed.push(b);
+  }
+  return R;
+}
+// a section's place in its plot (plot-local lx, lz) and in the world; called once the plot stands where it stays
+function placeSection(s) {
+  const A = FARM, b = s.plot, f = b.farmland, { r, c } = s.farmland, c0 = Math.cos(b.rot), s0 = Math.sin(b.rot);
+  s.farmland.lx = f.sgn * (A.rim + A.res + c * A.pitch + A.lane + A.secW / 2 - f.W / 2);
+  s.farmland.lz = -f.D / 2 + A.head + r * (A.secD + A.rowGap) + A.secD / 2;
+  s.x = b.x + c0 * s.farmland.lx + s0 * s.farmland.lz; s.z = b.z - s0 * s.farmland.lx + c0 * s.farmland.lz; s.rot = b.rot;
+}
+const plotToWorld = (b, lx, lz) => ({ x: b.x + Math.cos(b.rot) * lx + Math.sin(b.rot) * lz, z: b.z - Math.sin(b.rot) * lx + Math.cos(b.rot) * lz });
+const worldToPlot = (b, x, z) => { const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot), s = Math.sin(b.rot); return { lx: c * dx - s * dz, lz: s * dx + c * dz }; };
+// what stands under a ground point: a section, else its plot, else nothing
+function farmHit(x, z) {
+  const fm = world?.farmland; if (!fm) return null;
+  for (const b of fm.plots) { const p = worldToPlot(b, x, z); if (Math.abs(p.lx) > b.farmland.W / 2 || Math.abs(p.lz) > b.farmland.D / 2) continue;
+    const sec = b.farmland.secs.find(s => Math.abs(p.lx - s.farmland.lx) <= FARM.secW / 2 + FARM.lane / 2 && Math.abs(p.lz - s.farmland.lz) <= FARM.secD / 2 + FARM.rowGap / 2);
+    return { plot: b, sec: sec || null }; }
+  return null;
+}
+// the water's ways (world points): feedPath = the cistern before the tower, down the canal, along the branch into a plot's
+// reservoir; runPaths = from the reservoir's outlet along the header ditch to the section's lane, down the lane to the
+// section's front, then down each of its furrows (no section: along the whole header ditch)
+function plotPt(plot, fx, lz) { return plotToWorld(plot, plot.farmland.sgn * (fx - plot.farmland.W / 2), lz); }
+function feedPath(plot) {   // (a plot across the canal's end is fed along its front)
+  const fm = world.farmland, A = FARM, f = plot.farmland, inlet = plotPt(plot, A.rim + A.res / 2, f.cap ? -f.D / 2 - 1.1 : -f.D / 2 + 0.2), mid = plotPt(plot, A.rim + A.res / 2, -f.D / 2 + A.rim + 1.4);
+  return polyLen([{ x: fm.sx, z: fm.z0 }, { x: fm.sx, z: inlet.z }, inlet, mid]);
+}
+function runPaths(plot, sec) {
+  const A = FARM, f = plot.farmland, hz = -f.D / 2 + A.head * 0.5, h0 = A.rim + A.res, out = plotPt(plot, h0 - 0.4, hz);
+  if (!sec) return [polyLen([out, plotPt(plot, f.W - A.rim - 0.4, hz)])];
+  const fx = h0 + sec.farmland.c * A.pitch + A.lane / 2, front = sec.farmland.lz - A.secD / 2 + 0.15, back = sec.farmland.lz + A.secD / 2 - 0.15;
+  return furrowXs(sec).map(lx => { const p = polyLen([out, plotPt(plot, fx, hz), plotPt(plot, fx, front), plotToWorld(plot, lx, front), plotToWorld(plot, lx, back)]);
+    p.furrowAt = p[3].d; return p; });
 }
 function heightAt(w, x, z) {
   let flat = 0;
@@ -971,6 +1152,8 @@ function realize(w) {
     g.at(b.x, 0, b.z, b.rot, () => F[b.form](g, b));
     b.hw ??= b.R * 0.8; b.hd ??= b.R * 0.8; b.top ??= 3; b.door = doorOf(b);
   }
+  // the main tower faces its cistern and canal: the facility's road leaves from its back
+  if (w.farmland?.main) { const t = w.farmland.main, k = -((t.hd ?? t.R) + 1.4); t.door = { x: t.x + Math.sin(t.rot) * k, z: t.z + Math.cos(t.rot) * k }; }
   // the facility is a walled city-state: mudbrick ring with towers and two gates
   for (const d of w.districts) if (d.kind === 'facility') {
     const g = geos.get(d.id) || new Geo(); geos.set(d.id, g); const R = d.R - 1, n = Math.max(24, Math.round(R * tau / 3.2));
@@ -979,14 +1162,27 @@ function realize(w) {
         else { g.box(0, 0, 0, 0.9, 2.4, R * tau / n + 0.05, PAL.mud2, 8); if (i % 6 === 3) g.frustum(0, 0, 0, 1.9, 1.9, 1.6, 1.6, 3.3, PAL.mud, 8); else g.box(0, 2.4, 0, 0.5, 0.3, 0.5, PAL.mud, 8); } }); }
     d.gates = [0, Math.round(n / 2)].map(i => { const a = i / n * tau; return { x: d.x + Math.cos(a) * R, z: d.z + Math.sin(a) * R }; });
   }
+  // the farm's water source: a stepped cistern before the main tower, always full; one canal down the middle between mud
+  // banks; a branch to each plot's reservoir (the plots draw their reservoirs, ditches, lanes and furrows)
+  if (w.farmland) { const fm = w.farmland, A = FARM, g = geos.get(fm.d.id) || new Geo(); geos.set(fm.d.id, g); const R = A.cistR;
+    const L = Math.abs(fm.z1 - fm.z0), zc = (fm.z0 + fm.z1) / 2 + Math.sign(fm.z1 - fm.z0) * R / 2;
+    g.box(fm.sx, 0, zc, A.spineW, 0.12, L - R, PAL.water, 13);
+    for (const s of [-1, 1]) g.box(fm.sx + s * (A.spineW / 2 + 0.22), 0, zc, 0.44, 0.3, L - R, PAL.mud2, 8);
+    g.cyl(fm.sx, 0, fm.z0, R + 0.9, R + 0.9, 0.25, 28, PAL.mud2, 8);
+    g.cyl(fm.sx, 0, fm.z0, R + 0.5, R + 0.5, 0.55, 28, PAL.mud, 8, { cap: false }); g.cyl(fm.sx, 0.55, fm.z0, R + 0.52, R + 0.52, 0.07, 28, PAL.gold, 9, { cap: false });
+    g.cyl(fm.sx, 0, fm.z0, R, R, 0.42, 28, PAL.mud2, 8, { cap: false }); g.cyl(fm.sx, 0, fm.z0, R - 0.02, R - 0.02, 0.47, 28, PAL.water, 13);
+    for (const b of fm.plots) { const inlet = feedPath(b)[2], x0 = fm.sx + Math.sign(inlet.x - fm.sx) * A.spineW / 2, len = Math.abs(inlet.x - x0);
+      g.box((x0 + inlet.x) / 2, 0, inlet.z, len, 0.1, 1.1, PAL.water, 13); for (const s of [-1, 1]) g.box((x0 + inlet.x) / 2, 0, inlet.z + s * 0.68, len, 0.22, 0.26, PAL.mud3, 8); }
+  }
   for (const [id, g] of geos) { const m = new THREE.Mesh(g.geometry(), buildMat); m.castShadow = m.receiveShadow = true; m.userData.district = id; worldGroup.add(m); districtMeshes.push(m); }
   // roads: every door to its district's hub (the biggest building), every hub to the square
   const sq = w.bs.get('square'); w.roads = [];
   for (const d of w.districts) {
     const items = d.items.filter(b => b.form !== 'square');
-    d.hub = d === w.pole ? sq || items[0] : items.slice().sort((a, b) => (b.R - a.R) || (a.id < b.id ? -1 : 1))[0];
+    d.hub = d === w.pole ? sq || items[0] : (w.farmland?.d === d && w.farmland.main) || items.slice().sort((a, b) => (b.R - a.R) || (a.id < b.id ? -1 : 1))[0];
     if (!d.hub) continue;
-    for (const b of items) if (b !== d.hub) { const pts = polyLen(curve(b.door, d.hub.door, ((hashStr(b.id) % 100) / 100 - 0.5) * 0.6)); b.road = pts; w.roads.push({ pts, w: b.R > 3.5 ? 1.3 : 0.95 }); }
+    // (plots and rooms: no road to each strip)
+    for (const b of items) if (b !== d.hub && !(b.farmed && b !== w.farmland?.main)) { const pts = polyLen(curve(b.door, d.hub.door, ((hashStr(b.id) % 100) / 100 - 0.5) * 0.6)); b.road = pts; w.roads.push({ pts, w: b.R > 3.5 ? 1.3 : 0.95 }); }
     if (sq && d.hub !== sq) { const pts = polyLen(curve(d.hub.door, sq.door, ((hashStr(d.id) % 100) / 100 - 0.5) * 0.35)); d.road = pts; w.roads.push({ pts, w: 1.9 }); }
   }
   paintGround(w);
@@ -1012,6 +1208,7 @@ function realize(w) {
       mesh.setColorAt(i, new THREE.Color().setHSL(0.22, 0.12, 0.17 + s.c * 0.08)); });
     mesh.castShadow = true; mesh.receiveShadow = true; worldGroup.add(mesh); scatterMeshes.push(mesh);
   }
+  buildCrops(w);
   // shadow frustum and fog follow the land's size
   Object.assign(sun.shadow.camera, { left: -w.landR - 10, right: w.landR + 10, top: w.landR + 10, bottom: -w.landR - 10, near: 10, far: w.landR * 4 + 200 });
   sun.shadow.camera.updateProjectionMatrix();
@@ -1026,7 +1223,131 @@ function treeGeometry(kind) {
   return geo;
 }
 
-// the island offshore holds one mismatched hut per waiting misfit (up to eight): its real count, nothing inside
+// ---------- the farm's crops: one InstancedMesh (forest / wind-meadow recipes) ----------
+// Each plant's matrix (spot + turn) is composed once at build; its growth is per-instance attributes the vertex shader
+// reads: aShape = (height, width, frost on the tips), aCol = the body colour. A stage change rewrites those attributes,
+// never the matrices. Sway is whole cycles per P (seam-clean). No shadow: the depth pass would not see the growth.
+const cropU = { uTime: { value: 0 }, uP: { value: 40 }, uRise: { value: 1 } };
+const cropMat = new THREE.MeshLambertMaterial({ color: '#ffffff', side: THREE.DoubleSide });
+cropMat.onBeforeCompile = sh => {
+  Object.assign(sh.uniforms, cropU);
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aRnd; attribute vec3 aShape; attribute vec3 aCol; uniform float uTime, uP, uRise; varying vec3 vCrop;')
+    .replace('#include <begin_vertex>', `#include <begin_vertex>
+    float ty = transformed.y, hgt = aShape.x * (0.86 + 0.28 * aRnd) * uRise;
+    transformed.xz *= aShape.y * (0.84 + 0.32 * fract(aRnd * 7.31));
+    transformed.y *= hgt;
+    float ph = 6.2832 * (8.0 * uTime / uP + aRnd), sw = 0.6 * sin(ph) + 0.4 * sin(6.2832 * 13.0 * uTime / uP + aRnd * 11.0);
+    transformed.x += sw * 0.06 * ty * ty * hgt; transformed.z += sw * 0.03 * ty * ty * hgt;
+    vCrop = mix(aCol, vec3(0.62, 0.5, 0.26), aShape.z * smoothstep(0.55, 1.0, ty)) * (0.5 + 0.5 * ty);`);
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vCrop;').replace('vec4 diffuseColor = vec4( diffuse, opacity );', 'vec4 diffuseColor = vec4( vCrop, opacity );');
+};
+// a broadleaf crop one unit tall (the earlier stacked cones read as conifers, Max 10/29): a stem and tiers of pointed
+// leaves radiating out and drooping at the tip, widest low and turning upward at the crown. Two triangles a leaf, both
+// faces drawn.
+const cropGeo = (() => { const g = new Geo(), c = PAL.green;
+  g.cyl(0, 0, 0, 0.04, 0.03, 0.9, 4, c, 0, { cap: false });
+  const tier = (y, r, droop, n, a0) => { for (let i = 0; i < n; i++) { const a = a0 + i / n * tau, w = Math.PI / n * 0.85, P = (ang, rr, yy) => [Math.cos(ang) * rr, yy, Math.sin(ang) * rr];
+    const base = P(a, 0.03, y), l = P(a - w, r * 0.5, y + 0.05), tip = P(a, r, y - droop), rt = P(a + w, r * 0.5, y + 0.05);
+    g.tri(base, l, tip, c, 0); g.tri(base, tip, rt, c, 0); } };
+  tier(0.3, 0.5, 0.2, 7, 0); tier(0.56, 0.44, 0.14, 7, Math.PI / 7); tier(0.8, 0.3, 0.02, 6, 0.3); tier(0.95, 0.16, -0.05, 5, 0.9);
+  const geo = g.geometry(); for (const k of ['pat', 'puv', 'color']) geo.deleteAttribute(k); return geo; })();
+let cropMesh = null;
+const lin3 = h => { const c = new THREE.Color(h); return [c.r, c.g, c.b]; };   // THREE.Color converts sRGB hex to linear
+// a stage's look (spec: flower grows with frac, flush full and gold-leaning, veg short and bushy, mother medium and bushy,
+// unknown a neutral medium crop, resting bare soil)
+const STAGE_LOOK = { veg: { h: 0.3, w: 1.15, tip: 0, col: '#3e5434' }, mother: { h: 0.6, w: 1.3, tip: 0, col: '#36502f' }, flush: { h: 1, w: 1, tip: 1, col: '#6a5a2c' },
+  unknown: { h: 0.5, w: 0.95, tip: 0, col: '#55554d' }, resting: { h: 0, w: 0, tip: 0, col: '#000000' } };
+function stageOf(p) { const st = p?.stage, ph = st?.phase;
+  return ['flower', 'flush', 'veg', 'mother', 'resting', 'unknown'].includes(ph) ? { phase: ph, day: Number.isFinite(st.day) ? st.day : null, frac: Number.isFinite(st.frac) ? clamp(st.frac, 0, 1) : null, program: st.program ?? null } : { phase: 'unknown', day: null, frac: null, program: null }; }
+function cropLook(st) {
+  if (st.phase === 'flower') { const f = st.frac ?? 0; return { h: lerp(0.22, 1, f), w: lerp(0.8, 1.02, f), tip: smooth(0.35, 1, f) * 0.75, col: '#2f3d2a' }; }
+  return STAGE_LOOK[st.phase] || STAGE_LOOK.unknown;
+}
+function buildCrops(w) {
+  if (cropMesh) { scene.remove(cropMesh); cropMesh.geometry.dispose(); cropMesh.dispose(); cropMesh = null; }
+  const fm = w.farmland; if (!fm || !fm.secs.length) return;
+  const per = Math.min(84, Math.floor(FARM.maxPlants / fm.secs.length)), nx = FARM.plantCols, ny = Math.max(1, Math.floor(per / nx)), n = fm.secs.length * nx * ny;
+  const mesh = new THREE.InstancedMesh(cropGeo, cropMat, n), rnd = new Float32Array(n), r = rng(hashStr('crops') + n), m = new THREE.Matrix4(), qn = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const secOf = new Uint16Array(n); let i = 0;
+  for (const s of fm.secs) for (let a = 0; a < nx; a++) for (let b = 0; b < ny; b++) {
+    const lx = s.farmland.lx + ((a + 0.5) / nx - 0.5) * (FARM.secW - 0.6) + (r() - 0.5) * 0.12, lz = s.farmland.lz + ((b + 0.5) / ny - 0.5) * (FARM.secD - 0.6) + (r() - 0.5) * 0.18, p = plotToWorld(s.plot, lx, lz);
+    mesh.setMatrixAt(i, m.compose(v.set(p.x, 0.16, p.z), qn.setFromAxisAngle(up, r() * tau), one.set(FARM.plantScale[0], FARM.plantScale[1], FARM.plantScale[0]))); rnd[i] = r(); secOf[i] = s.si; i++; }
+  mesh.geometry = cropGeo.clone();
+  mesh.geometry.setAttribute('aRnd', new THREE.InstancedBufferAttribute(rnd, 1));
+  mesh.geometry.setAttribute('aShape', new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3));
+  mesh.geometry.setAttribute('aCol', new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3));
+  mesh.frustumCulled = false; mesh.castShadow = false; mesh.receiveShadow = true; mesh.userData.secOf = secOf; mesh.userData.per = nx * ny;
+  scene.add(mesh); cropMesh = mesh; farmSig = ''; farmBuiltAt = pageNow();
+}
+// the stages onto the plants and the resting flags onto the soil: only when a stage changed
+let farmSig = '';
+function syncStages() {
+  const fm = world?.farmland; if (!fm || !cropMesh) return;
+  const looks = fm.secs.map(s => { s.stage = stageOf(s.p); s.look = cropLook(s.stage); return s.look; });
+  const sig = fm.secs.map(s => s.stage.phase + (s.stage.frac ?? '')).join('|'); if (sig === farmSig) return; farmSig = sig;
+  const sh = cropMesh.geometry.attributes.aShape, co = cropMesh.geometry.attributes.aCol, secOf = cropMesh.userData.secOf;
+  for (let i = 0; i < secOf.length; i++) { const L = looks[secOf[i]], c = lin3(L.col); sh.setXYZ(i, L.h * FARM.cropH, L.w, L.tip); co.setXYZ(i, c[0], c[1], c[2]); }
+  sh.needsUpdate = co.needsUpdate = true;
+}
+
+// ---------- the farm's water: one points draw (particle-filaments recipe: closed-form positions along a polyline) ----------
+const WATER_CAP = 4000;
+const waterGeo = new THREE.BufferGeometry(); waterGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(WATER_CAP * 3), 3)); waterGeo.setAttribute('aA', new THREE.BufferAttribute(new Float32Array(WATER_CAP), 1));
+const waterPtsMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uPx: { value: 500 }, uSize: { value: 0.7 }, uMin: { value: 2.6 }, uCol: { value: new THREE.Color('#fff0c4') }, uGain: { value: 1 } },   // white-gold: reads on black
+  vertexShader: 'attribute float aA; varying float vA; uniform float uPx, uSize, uMin; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = max(uMin, uSize * uPx / -mv.z); vA = aA; }',
+  fragmentShader: 'varying float vA; uniform vec3 uCol; uniform float uGain; void main(){ float r = length(gl_PointCoord - 0.5); if (r > 0.5) discard; float a = smoothstep(0.5, 0.08, r) * vA * uGain; gl_FragColor = vec4(uCol * a, a); }' });
+const waterPts = new THREE.Points(waterGeo, waterPtsMat); waterPts.frustumCulled = false; waterPts.visible = false; scene.add(waterPts);
+
+// ---------- the replay: the latest full day of runs as a loop (Max 10/29) ----------
+// Live and public: one day every REPLAY_LOOP_MS of the viewer's clock. ?t= (and the no-feed demo): one day every P, so the
+// loop is seam-clean. Everything below is a pure function of the loop time: water, wet soil and the clock.
+const REPLAY_LOOP_MS = 10 * 60e3;          // knob: 24 h of runs in ~10 min
+const SHOW_MIN = 20 * 60e3, DRY_MS = 60 * 60e3, REFILL_MS = 45 * 60e3;   // …and a reservoir refills over 45 min of the day   // a run's water shows at least 20 min of the day; wet soil dries back over 1 h of the day
+const DEMO_NOW = new Date(2026, 9, 29, 6, 10).getTime();
+const dayKey = ms => { const d = new Date(ms); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+let replay = null;   // { key, label, runs: [{ tod, eff, secs, paths, s }] }
+const runPlot = r => { const b = placeB(r.place); return !b ? null : b.form === 'plot' ? b : b.form === 'section' ? b.plot : null; };
+const runSecs = r => { const b = placeB(r.place); if (!b) return [];   // a run on a building place is the veg tank: its veg and mother rooms
+  return b.form === 'section' ? [b] : b.form === 'plot' ? b.farmland.secs.filter(s => s.p.roomKind === 'veg' || s.p.roomKind === 'mother') : []; };
+function buildReplay() {
+  // the replay reads the run EVENTS (every run of the kept days, also on the public copy), not facility.runs: the public
+  // copy caps that table list at 20 runs per building, which would replay only a day's last hours (review I1)
+  const evRuns = (model?.facility?.events ?? []).filter(e => e?.kind === 'run' && Number.isFinite(e.t) && e.to)
+    .map(e => ({ t: e.t, end: null, place: e.to, min: e.min ?? null, gal: e.gal ?? null, flow: e.flow ?? null }));
+  replay = null; const fm = world?.farmland, runs = evRuns.length ? evRuns : model?.facility?.runs; if (!fm || !Array.isArray(runs) || !runs.length) return;
+  const today = dayKey(source === 'demo' ? DEMO_NOW : Date.now()), keys = [...new Set(runs.map(r => dayKey(r.t)))].sort((a, b) => a - b);
+  const key = keys.filter(k => k < today).pop() ?? keys[keys.length - 1], day = runs.filter(r => dayKey(r.t) === key && runPlot(r));
+  const flowOf = r => Number.isFinite(r.flow) && r.flow > 0 ? r.flow : Number.isFinite(r.gal) && Number.isFinite(r.min) && r.min > 0 ? r.gal / r.min : null;
+  const top = Math.max(0, ...day.map(r => flowOf(r) ?? 0));
+  const out = day.map(r => { const secs = runSecs(r), plot = runPlot(r), mins = Number.isFinite(r.min) && r.min > 0 ? r.min : Number.isFinite(r.end) && r.end > r.t ? (r.end - r.t) / 60e3 : 5, fl = flowOf(r);
+    return { place: r.place, tod: todOf(r.t), eff: Math.max(mins * 60e3, SHOW_MIN), secs: secs.map(s => s.si), pi: plot.pi, gal: Number.isFinite(r.gal) && r.gal > 0 ? r.gal : null,
+      paths: secs.length ? secs.flatMap(s => runPaths(plot, s).map(p => Object.assign(p, { si: s.si }))) : runPaths(plot, null),
+      s: fl != null && top > 0 ? 0.35 + 0.65 * fl / top : 0.6 }; });   // strength: the day's own flows, relative; unknown → a middling stream
+  // a reservoir's drawdown: each run takes its gallons (the day's middling run when the reading is missing); three middling
+  // runs at once take it to its lowest mark. It refills over REFILL_MS of the day after the run.
+  const gals = out.map(r => r.gal).filter(v => v != null).sort((a, b) => a - b), mid = gals.length ? gals[gals.length >> 1] : 1, ref = 3 * mid;
+  for (const r of out) r.draw = (r.gal ?? mid) / ref;
+  replay = { key, label: new Date(day[0]?.t ?? runs[runs.length - 1].t).toLocaleDateString([], { weekday: 'short' }), runs: out };
+}
+const loopFrac = t => source === 'demo' ? fract(t / P) : (Date.now() % REPLAY_LOOP_MS) / REPLAY_LOOP_MS;
+// the farm at loop time t: which sections are watering, how wet each is, how far down its furrows the water has run,
+// each reservoir's drawdown, the replayed time of day. The water's front runs the whole way (reservoir → furrow end) over
+// the first fifth of a run; a furrow fills as the front passes along it.
+const FRONT = 0.2;
+function farmAt(t) {
+  const fm = world?.farmland, n = fm ? fm.secs.length : 0, tod = loopFrac(t) * DAY, lit = new Set(), wet = new Float32Array(n), fill = new Float32Array(n), dip = new Float32Array(fm ? fm.plots.length : 0), done = new Uint8Array(n), active = [];
+  if (fm && replay) for (const r of replay.runs) { const age = (tod - r.tod + DAY) % DAY;
+    if (age < r.eff) { active.push({ r, age }); const fr = clamp(age / (r.eff * FRONT), 0, 1);
+      for (const si of r.secs) { lit.add(si); wet[si] = 1; }
+      for (const p of r.paths) if (p.si != null) fill[p.si] = Math.max(fill[p.si], clamp((fr * p.len - p.furrowAt) / (p.len - p.furrowAt), 0, 1));
+      dip[r.pi] += r.draw * (age / r.eff); }
+    else { if (age < r.eff + DRY_MS) { const k = 1 - smooth(0, 1, (age - r.eff) / DRY_MS); for (const si of r.secs) { if (k > wet[si]) wet[si] = k; done[si] = 1; } }
+      if (age < r.eff + REFILL_MS) dip[r.pi] += r.draw * (1 - smooth(0, 1, (age - r.eff) / REFILL_MS)); } }
+  for (let i = 0; i < dip.length; i++) dip[i] = Math.min(1, dip[i]);
+  for (let i = 0; i < n; i++) if (!lit.has(i) && done[i]) fill[i] = 1;   // after a run its furrows stay full while the soil dries
+  return { tod, lit, wet, fill, dip, active };
+}
 let islandN = -1;
 function syncIsland(n) {
   if (!world?.island || n === islandN) return; islandN = n;
@@ -1072,7 +1393,6 @@ const armMesh = mkInst(new THREE.BoxGeometry(0.1, 0.62, 0.1).translate(0, -0.31,
 const tabletMesh = mkInst(new THREE.BoxGeometry(0.34, 0.44, 0.08), new THREE.MeshStandardMaterial({ color: '#d9ad4f', metalness: 1, roughness: 0.3 }), MAXV);
 const scaffMesh = mkInst(unitBox, lamb('#8a7454'), 1200);
 const dustMesh = mkInst(new THREE.IcosahedronGeometry(0.4, 0), new THREE.MeshLambertMaterial({ color: '#d8d2c4', flatShading: true }), 600, false);
-const fireMesh = mkInst(new THREE.ConeGeometry(0.4, 1.2, 7).translate(0, 0.6, 0), new THREE.MeshBasicMaterial({ color: '#ffb347' }), 80, false);
 const ringMesh = mkInst(new THREE.RingGeometry(0.94, 1, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#d6b057', transparent: true, opacity: 0.9, depthWrite: false }), 200, false);
 const craneGeo = (() => { const g = new Geo(); g.box(0, 0, 0, 0.3, 7, 0.3, PAL.wood, 5); g.box(1.6, 6.6, 0, 4.2, 0.22, 0.22, PAL.wood, 5); g.box(-0.9, 6.4, 0, 1.6, 0.3, 0.3, PAL.wood, 5); g.box(3.5, 1.2, 0, 0.04, 5.4, 0.04, PAL.dark, 0); g.box(3.5, 1.0, 0, 0.5, 0.4, 0.5, PAL.marble, 4); const geo = g.geometry(); return geo; })();
 const craneMesh = mkInst(craneGeo, buildMat, 40);
@@ -1098,7 +1418,7 @@ const pageNow = () => performance.now() / 1000;
 const DEMO_NAMES = {
   hark: { districts: [['cat-app', 'Applications'], ['cat-data', 'Data Pipeline'], ['cat-infra', 'Infrastructure'], ['cat-display', 'Display / Mobile'], ['cat-hardware', 'Hardware']],
     repos: ['Main App', 'Ledger', 'Dashboard', 'Reader', 'Planner', 'Notifier', 'Importer', 'Exporter', 'Scheduler', 'Monitor', 'Archive', 'Gateway', 'Kiosk', 'Wizard', 'Sync', 'Reports', 'Alerts', 'Sensors', 'Mobile App', 'Display', 'Backup', 'Toolkit'],
-    cities: ['KL', 'MN'], machines: ['main-hub', 'relay-box', 'watch-box', 'archive-box'] },
+    cities: ['KL', 'MN', 'PR'], machines: ['main-hub', 'relay-box', 'watch-box', 'archive-box'] },
   personal: { districts: [['orbit-creator', 'Creator'], ['orbit-worlds', 'Worlds'], ['orbit-tools', 'Tools'], ['orbit-games', 'Games'], ['orbit-agents', 'Agents']],
     repos: ['Mosaic Grove', 'Glass Cards', 'Trip World', 'Long Way Home', 'Sand Mandala', 'Lego Builder', 'Agent Hive', 'Route Map', 'Paper Cut', 'Ink Marbling', 'LED Board', 'Op-Art Weave', 'Toon Reward',
       'Scale Zoom', 'Physics Bake', 'Seaman Tank', 'Night Sky', 'Bus Stop', 'Atlas', 'Forge Notes', 'Kiln', 'Loom'] },
@@ -1127,8 +1447,7 @@ function makeDemo() {
       // the facility as the feed sends it: rooms and buildings by (invented) real-shaped names, machines by bare (invented) ids
       districts.push({ id: 'facility', name: 'Facility', kind: 'facility' });
       N.machines.forEach((g, i) => add({ id: 'tower-' + slug(g), name: g, district: 'facility', kind: 'machine', degree: i ? 1 : 16 }));
-      N.cities.forEach((c, ci) => { add({ id: 'city-' + slug(c), name: c, district: 'facility', kind: 'building', degree: 4 });
-        for (let i = 0; i < 4; i++) add({ id: `room-${slug(c)}${i + 1}`, name: `${c}${i + 1}`, district: 'facility', kind: 'room', status: 'quiet', building: 'city-' + slug(c), degree: 1 }); });
+      demoFarm(N.cities, add, slug);
     }
     // sessions: three at work, two idle
     const ds = N.districts.map(x => x[0]);
@@ -1148,8 +1467,37 @@ function makeDemo() {
   return { eco: ECO, now: 0, districts, places, villagers, events: [], scribes: sentences,
     library: ECO === 'misfit' ? null : { name: ECO === 'hark' ? 'Library of Ashurbanipal' : 'Alexandria', repos: ECO === 'hark' ? 9 : 14, lastArchive: '2026-10-26', bytes: 412e6, chronicleDays: 6,
       chronicle: [['2026-10-26', '4 entries written'], ['2026-10-27', 'water ran to KL1 at 6:10'], ['2026-10-28', 'three commits came to Scheduler']].map(([date, line]) => ({ date, line: date + ' ' + line })) },
-    facility: ECO === 'hark' ? { asOf: null, stale: false, events: [], demo: true } : null,
+    facility: ECO === 'hark' ? { asOf: null, stale: false, events: [], runs: demoRuns(places), demo: true } : null,
     counts: { sessions: 5, working: 3, agentsRunning: 1, villagers: villagers.length, walking: 4, places: places.length, events: 0, facilityActive: 1 }, demo: true };
+}
+// The demo farm, in the feed's exact shape (lab/ecosystem/eco-feed.mjs, the plan's "Payload interface"): buildings are
+// the plots, rooms carry roomKind, order and stage. Invented codes only. Stages cover every phase: flower days across the
+// cycle, a flush, a resting room (no runs in the kept days), a room the feed could not read (unknown).
+function demoFarm(cities, add, slug) {
+  const plan = { KL: ['D 1-7', 'D 7-14', 'D 14-21', 'D 21-28', 'rest', 'D 35-42', 'D 42-49', 'Flush'], MN: ['D 56-63', 'D 1-7', 'D 14-21', 'D 28-35', 'D 42-49', '?'], PR: ['D 21-28', 'D 35-42', 'D 49-56', 'D 7-14'] };
+  const veg = { KL: 2, MN: 1, PR: 1 }, mom = { KL: true, MN: true, PR: false };
+  cities.forEach(c => { const id = 'city-' + slug(c), fl = plan[c] || [], n = fl.length + (veg[c] || 0) + (mom[c] ? 1 : 0); let order = 0;
+    add({ id, name: c, district: 'facility', kind: 'building', degree: n });
+    const room = (name, roomKind, stage) => add({ id: 'room-' + slug(name), name, district: 'facility', kind: 'room', status: 'quiet', building: id, degree: 1, roomKind, order: order++, stage });
+    fl.forEach((code, i) => { const m = /^D (\d+)-(\d+)$/.exec(code), day = m ? +m[2] : null;
+      room(c + (i + 1), 'flower', m ? { phase: 'flower', day, frac: clamp(day / 63, 0, 1), program: code } : code === 'Flush' ? { phase: 'flush', day: null, frac: 1, program: code }
+        : code === 'rest' ? { phase: 'resting', day: null, frac: null, program: null } : { phase: 'unknown', day: null, frac: null, program: null }); });
+    for (let i = 0; i < (veg[c] || 0); i++) room(c + 'V' + (i + 1), 'veg', { phase: 'veg', day: null, frac: null, program: 'DRIP VEG' });
+    if (mom[c]) room(c + 'MOM', 'mother', { phase: 'mother', day: null, frac: null, program: 'DRIP VEG' }); });
+}
+// three kept days of runs ending the day before the demo's "now" (local clock, so the replay reads the same anywhere):
+// each watered flower room 7 runs a day, each building's veg tank 3; a few readings missing (shown "—")
+function demoRuns(places) {
+  const r = rng(505), out = [], rooms = places.filter(p => p.kind === 'room' && p.roomKind === 'flower' && p.stage?.phase !== 'resting'), blds = places.filter(p => p.kind === 'building');
+  const at = (d, h, m) => new Date(2026, 9, 26 + d, h, m).getTime();
+  const run = (t, place, zone, min, flow, ec, program) => { const k = out.length;
+    out.push({ t, end: t + min * 60e3, place, zone, min, gal: +(flow * min).toFixed(1), flow: k % 53 === 7 ? null : flow, ec: +ec.toFixed(2), ph: k % 37 === 11 ? null : +(5.75 + r() * 0.3).toFixed(2), program }); };
+  for (let d = 0; d < 3; d++) {
+    rooms.forEach((p, ri) => { const frac = p.stage?.frac ?? 0.5, flow = 2.2 + (ri * 0.37 % 2.4), min = frac > 0.45 ? 7 : 4;
+      for (let j = 0; j < 7; j++) run(at(d, 6, 0) + (j * 95 + ri * 6) * 60e3, p.id, null, min, +(flow + (r() - 0.5) * 0.3).toFixed(2), 1.6 + 1.5 * frac + r() * 0.2, p.stage?.program ?? null); });
+    blds.forEach((b, bi) => { for (const h of [7, 11, 15]) run(at(d, h, 30 + bi * 8), b.id, 'Veg tank', 12, +(3.8 + r() * 0.4).toFixed(2), 1.2 + r() * 0.2, 'DRIP VEG'); });
+  }
+  return out.sort((a, b) => a.t - b.t);
 }
 // demo walkers: a fixed set of (from, to, offset) on a closed loop of P
 function demoWalkers() {
@@ -1158,7 +1506,6 @@ function demoWalkers() {
   const r = rng(77), out = [];
   for (let i = 0; i < 7 && ps.length; i++) { const from = i < 4 && houses_.length ? houses_[i % houses_.length].id : ps[Math.floor(r() * ps.length)].id, to = i === 5 ? 'square' : ps[Math.floor(r() * ps.length)].id;
     out.push({ id: 'demo-walk-' + i, from, place: to, state: 'walking', kind: i === 5 ? 'commit' : 'tool', o: r(), name: `Claude ${1 + (i % 5)}` }); }
-  if (ECO === 'hark') { const rooms = model.places.filter(p => p.kind === 'room'); for (let i = 0; i < 3 && rooms.length; i++) out.push({ id: 'demo-replay-' + i, from: 'tower-main-hub', place: rooms[(i * 3) % rooms.length].id, state: 'replay', kind: 'run', o: 0.2 + i * 0.3, name: '' }); }
   return out;
 }
 
@@ -1167,13 +1514,14 @@ function apply(d, seq) {
   if (seq != null) { if (seq < appliedSeq) return; appliedSeq = seq; }
   model = d; source = d.demo ? 'demo' : 'live';
   for (const p of d.places) p._tier = p.kind === 'library' || p.kind === 'square' ? null : tierFor(p);
-  const key = ECO + '|' + d.places.filter(p => p.kind !== 'house').map(p => p.id + ':' + p._tier + ':' + p.district).sort().join(',') + '|' + d.districts.map(x => x.id).join(',');
+  const key = ECO + '|' + d.places.filter(p => p.kind !== 'house').map(p => p.id + ':' + p._tier + ':' + p.district + (p.kind === 'room' ? ':' + (p.building ?? '') + ':' + (p.order ?? '') : '')).sort().join(',') + '|' + d.districts.map(x => x.id).join(',');
   if (key !== staticKey) { staticKey = key; world = buildWorld(d); realize(world); islandN = -1; if (d.demo && ECO !== 'misfit') misfitCount = 3; syncIsland(misfitCount ?? 0); for (const h of houses.values()) { houseGroup.remove(h.mesh); h.mesh.geometry.dispose(); } houses.clear(); housePos.clear(); makeTags(); if (!framed) frameStart(); }
   else for (const p of d.places) { const b = world.bs.get(p.id); if (b) b.p = p; }
   const cn = d.library?.chronicle?.length ?? 0;   // the chronicle grew since the last poll: one tablet per new line goes to the library
   if (!d.demo && chronicleN >= 0 && cn > chronicleN) for (let i = 0; i < Math.min(4, cn - chronicleN); i++) { const id = 'chron-' + Date.now() + '-' + i; seenWalk.set(id, pageNow() + i * 2); chronicleWalks.push(id); }
   if (chronicleWalks.length > 12) chronicleWalks.splice(0, chronicleWalks.length - 12);
   chronicleN = cn;
+  syncStages(); buildReplay();
   syncHouses(d); makeTags(true); shadowDirty = true;
   hudDirty = true; refreshCard();
 }
@@ -1219,6 +1567,7 @@ function makeTags(update) {
   for (const h of houses.values()) ensure('p:' + h.b.id, 'tag', () => showPlace(h.b.id));
   ensure('p:square', 'tag', () => showPlace('square'));
   if (world.island) ensure('island', 'tag big', () => showPlace('island'));
+  if (world.farmland) ensure('clock', 'ctag', () => focusDistrict(world.farmland.d.id, true));
   for (const [id, el] of tagEls) if (!want.has(id)) { el.remove(); tagEls.delete(id); }
 }
 const v3 = new THREE.Vector3();
@@ -1268,9 +1617,13 @@ function placeTags(st) {
     const big = b.form === 'alexandria' || b.form === 'ashurbanipal' || b.form === 'ziggurat' || b.form === 'colosseum' || t >= 5;
     const show = lod === 'street' || (lod === 'mid' ? t >= 3 || big || active || p.kind === 'house' || p.kind === 'square' : !PHONE && (t >= 4 || big));   // a phone's overview names the quarters only
     const name = p.kind === 'square' ? 'the square' : p.name;
-    const html = esc(name) + (p.kind === 'house' && st.byHome.get(b.id) ? `<span class="n">${st.byHome.get(b.id)}</span>` : '');
+    const html = esc(name) + (p.kind === 'house' && st.byHome.get(b.id) ? `<span class="n">${st.byHome.get(b.id)}</span>` : '') + (b.form === 'section' && b.stage ? `<span class="n">${esc(stageShort(b.stage))}</span>` : '');
     items.push({ el, html, b, show, must: big, cls: 'tag' + (big ? ' big' : '') + (active ? ' act' : ''), pos: [b.x, (b.top ?? 3) + 0.3, b.z], pri: (big ? 0 : 6 - t) - (active ? 3 : 0) });
   }
+  // the farm's clock: "replaying Tue 6:10 AM", at the basin before the main tower (not at a phone's overview)
+  if (world.farmland && farmNow && replay) { const c = new Date(2000, 0, 1, 0, 0, 0, Math.floor(farmNow.tod / 60e3) * 60e3);
+    items.push({ el: tagEls.get('clock'), html: `replaying ${esc(replay.label)} ${fmtTime(c.getTime())}`, cls: 'ctag', pos: [world.farmland.sx, 0.4, world.farmland.z0], pri: 2, show: !(PHONE && lod === 'overview') }); }
+  else if (tagEls.get('clock')) tagEls.get('clock').classList.add('hid');
   // the offshore island keeps a name at a phone's overview too, short, placed after the quarters
   if (world.island) items.push({ el: tagEls.get('island'), html: `${one ? 'Misfits' : 'Island of Misfit Toys'}<span class="n">${misfitCount == null ? '·' : misfitCount}</span>`, cls: 'tag big', pos: [world.island.x, 4, world.island.z], pri: 1, must: true, show: true });
   items.sort((a, b) => a.pri - b.pri);
@@ -1323,7 +1676,7 @@ function placeTags(st) {
       const pad = it.bandN ? 2 : it.district ? 10 : 3;   // quarter names keep a wider berth from every other tag (in a phone's bands, rows sit close)
       let cost = placed.reduce((c, q) => c + overlap([r[0] - pad, r[1] - pad * 0.7, r[2] + 2 * pad, r[3] + 1.4 * pad], q) * 4, 0);
       if (PHONE && placed.some(q => overlap(r, q) > 0)) continue;   // a phone: a spot on another tag is never taken
-      for (const [id, f] of obstacles) if (id !== own) cost += overlap(r, f);
+      for (const [id, f] of obstacles) if (id !== own && !(it.b?.farmed && sameFarmPlot(it.b, id))) cost += overlap(r, f);   // a farm tag may lie on its own plot
       if (it.district) for (const qr of qrects) cost += overlap(r, qr) * 0.5;
       if (it.bandN && ci >= it.bandN) cost += 1e6;   // a phone's band spot always beats one on the island
       if (!best || cost < best.cost) best = { r, cost }; if (cost === 0) break;
@@ -1339,6 +1692,11 @@ function placeTags(st) {
   leaderDots().innerHTML = lines.map(([a, b]) => `<circle cx="${px(a)}" cy="${px(b)}" r="1.6"></circle>`).join('');
 }
 const camRight = new THREE.Vector3();
+const plotOfB = b => b?.form === 'plot' ? b : b?.form === 'section' ? b.plot : null;
+const sameFarmPlot = (b, id) => { const a = plotOfB(b), o = plotOfB(world.bs.get(id)); return !!a && a === o; };
+// a stage in plain words: short for a tag, long for the hover and the card (never an invented day)
+const stageShort = st => st.phase === 'flower' ? (st.day != null ? 'day ' + st.day : 'flower') : st.phase === 'unknown' ? 'unknown' : st.phase;
+const stageLong = st => st.phase === 'flower' ? `flower${st.day != null ? ' · day ' + st.day : ''}` : st.phase === 'unknown' ? 'stage unknown' : st.phase === 'flush' ? 'flush (ripe)' : st.phase;
 
 // ---------- HUD, stamp, card ----------
 const hud = { crumb: document.getElementById('crumb'), stats: document.getElementById('stats'), stamp: document.getElementById('stamp'), legend: document.getElementById('legend') };
@@ -1376,8 +1734,8 @@ function drawHud(st) {
   const f = model?.facility;
   let stamp = demo ? `<span>demo · seeded data${fixedTime ? '' : ' (no feed)'}</span>` : `<span>feed <b>${feedState.ok ? (PUBLIC ? 'public snapshot' : 'live · local') : 'lost'}</b></span>`;
   if (PUBLIC && !demo && model?.asOf) stamp += `<span>as of <b>${fmtDay(Date.parse(model.asOf))} ${fmtTime(Date.parse(model.asOf))}</b>${sleeping() ? ' · village sleeping' : ''}</span>`;
-  if (ECO === 'hark' && f) stamp += f.demo ? '<span>facility data as of <b>6:10 AM</b> · replaying its events at their times</span>'
-    : `<span>facility data as of <b>${f.asOf ? fmtDay(Date.parse(f.asOf)) + ' ' + fmtTime(Date.parse(f.asOf)) : 'never read'}</b>${f.stale ? ' (stale)' : ''} · replaying its events at their times</span>`;
+  if (ECO === 'hark' && f) stamp += f.demo ? '<span>facility data as of <b>6:10 AM</b> · replaying the last full day of watering</span>'
+    : `<span>facility data as of <b>${f.asOf ? fmtDay(Date.parse(f.asOf)) + ' ' + fmtTime(Date.parse(f.asOf)) : 'never read'}</b>${f.stale ? ' (stale)' : ''} · replaying the last full day of watering</span>`;
   stamp += `<span id="refreshNote">${esc(refreshNote)}</span>`;
   // a phone's stamp: one short line (the long spans above are hidden there, this one on the desktop)
   const wk = ms => new Date(ms).toLocaleDateString([], { weekday: 'short' }) + ' ' + fmtTime(ms);
@@ -1397,7 +1755,7 @@ function drawLegend() {
     : `Each building is a project or system — the more things it connects to, the bigger it is. Each person walking a road is something that really just happened: a file edited, a command run, a commit. ` +
       `People in gold hats are Claude sessions working right now; they only move while a session is active. Scaffolding means that place was worked on in the last 3 minutes. ` +
       `The people in the centre square read out what happened today, and the library keeps the daily log.` +
-      (ECO === 'hark' ? ` The walled city is the facility: fields are grow rooms, the big halls are the buildings, and the tower is the main computer. Fields light up and beacons glow as the day's watering and readings replay.` : '')) + '</span>';
+      (ECO === 'hark' ? ` The walled farm is the facility: each plot is a building and each strip in it a room, its plants as tall as the room is far into flower (bare soil means resting), and water from the cistern by the main tower fills each plot's reservoir and runs white down the furrows of the room being watered, replaying the last full day every ten minutes.` : '')) + '</span>';
 }
 // a phone: the legend chip opens a bottom sheet; its × or a tap outside it (the scrim) closes it. The desktop never folds it.
 const scrimEl = document.getElementById('scrim');
@@ -1413,8 +1771,57 @@ function layoutPhone() { if (!PHONE) return; document.body.style.setProperty('--
 function phoneTop() { const shown = getComputedStyle(hud.stamp).display !== 'none'; return Math.max(shown ? hud.stamp.getBoundingClientRect().bottom : 0, headerEl.getBoundingClientRect().bottom) + 6; }
 const cardEl = document.getElementById('card');
 let cardSel = null;
-function openCard(id) { cardSel = id; if (hud.legend.classList.contains('open')) legendOpen(false); refreshCard(); }
-function closeCard() { cardSel = null; cardEl.classList.remove('open'); }
+function openCard(id) { if (id !== cardSel) cardMore = false; cardSel = id; if (hud.legend.classList.contains('open')) legendOpen(false); refreshCard(); }
+function closeCard() { cardSel = null; cardEl.classList.remove('open'); cardEl.__html = ''; }
+let cardMore = false;
+// ---------- the farm's runs: a building's runs newest first, as a small table (no links, numbers not verdicts) ----------
+// pH is the payload's mean of the two probes; a missing or out-of-range value arrives null and shows "—"
+const dash = (v, d) => v == null || !Number.isFinite(v) ? '—' : v.toFixed(d);
+const fmtMin = v => v == null || !Number.isFinite(v) ? '—' : String(Math.round(v * 10) / 10);
+function plotRuns(plot) {
+  const runs = model?.facility?.runs; if (!Array.isArray(runs)) return [];
+  return runs.filter(r => runPlot(r) === plot).sort((a, b) => b.t - a.t);
+}
+function runsTable(rows) {
+  return `<table class="runs"><thead><tr><th>time</th><th>room</th><th class="n">pH</th><th class="n">EC</th><th class="n">flow</th><th class="n">min</th></tr></thead><tbody>` +
+    rows.map(r => { const b = placeB(r.place), room = b?.form === 'plot' ? (r.zone || 'Veg tank') : b?.p.name ?? '—';   // a run on a building place is its veg tank
+      return `<tr><td>${esc(new Date(r.t).toLocaleDateString([], { weekday: 'short' }) + ' ' + fmtTime(r.t))}</td><td>${esc(room)}</td><td class="n">${dash(r.ph, 2)}</td><td class="n">${dash(r.ec, 2)}</td><td class="n">${dash(r.flow, 1)}</td><td class="n">${fmtMin(r.min)}</td></tr>`; }).join('') + '</tbody></table>';
+}
+function farmHead(b) {
+  const plot = plotOfB(b), secs = plot.farmland.secs;
+  if (b.form === 'section') { const st = b.stage || stageOf(b.p); return { k: `${plot.p.name} · room`, name: b.p.name, sub: stageLong(st) + (st.program && st.phase !== 'unknown' ? ` (${st.program})` : '') }; }
+  const by = new Map(); for (const s of secs) { const ph = (s.stage || stageOf(s.p)).phase; by.set(ph, (by.get(ph) || 0) + 1); }
+  return { k: 'Facility · plot', name: plot.p.name, sub: `${secs.length} room${secs.length === 1 ? '' : 's'}` + (secs.length ? ' · ' + [...by].map(([ph, n]) => `${n} ${ph === 'unknown' ? 'stage unknown' : ph}`).join(' · ') : '') };
+}
+function farmCard(b) {
+  const h = farmHead(b), runs = plotRuns(plotOfB(b)), shown = cardMore ? runs : runs.slice(0, 3);
+  return `<div class="k">${esc(h.k)}</div><h2>${esc(h.name)}</h2><div class="sub">${esc(h.sub)}</div>` +
+    `<div class="sec"><h4>${cardMore ? `all kept runs · ${runs.length}` : 'last runs'} · ${esc(plotOfB(b).p.name)}</h4>` +
+    (runs.length ? (cardMore ? `<div class="runsBox">${runsTable(shown)}</div>` : runsTable(shown)) : '<div class="note">No runs kept yet.</div>') +
+    (runs.length > 3 ? `<div class="acts"><button class="btn" data-more type="button">${cardMore ? 'fewer runs' : `more runs (${runs.length})`}</button></div>` : '') +
+    `<div class="note">pH is the average of the two probes. "—" means the reading was missing or out of range.</div></div>`;
+}
+// desktop hover: the same table, the 3 newest runs, beside the pointer (it takes no pointer; a click opens the card)
+const tipEl = document.getElementById('farmTip');
+let tipKey = '';
+function farmHover(cx, cy) {
+  const hit = PHONE || !world?.farmland ? null : farmPick(cx, cy);
+  if (!hit) { if (tipKey) { tipEl.style.display = 'none'; tipKey = ''; } return; }
+  const b = hit.sec || hit.plot, key = b.id + '|' + (model?.facility?.runs?.length ?? 0) + '|' + (b.stage?.phase ?? '');
+  if (key !== tipKey) { tipKey = key; const h = farmHead(b), runs = plotRuns(hit.plot).slice(0, 3);
+    tipEl.innerHTML = `<div class="k">${esc(h.k)}</div><b>${esc(h.name)}</b> <span class="st">${esc(h.sub)}</span>` +
+      (runs.length ? runsTable(runs) : '<div class="note">No runs kept yet.</div>') + '<div class="note">Click for more runs.</div>'; }
+  tipEl.style.display = 'block';
+  const w = tipEl.offsetWidth, hh = tipEl.offsetHeight, x = cx + 18 + w > W - 8 ? cx - 18 - w : cx + 18, y = clamp(cy - hh / 2, 64, H - hh - 8);
+  tipEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+}
+const hideTip = () => { if (tipKey) { tipEl.style.display = 'none'; tipKey = ''; } };
+// a screen point → what of the farm stands there (a ray against the flat farm ground, no mesh raycast)
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.16), groundHit = new THREE.Vector3();
+function farmPick(cx, cy) {
+  ptr.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); ray.setFromCamera(ptr, camera);
+  return ray.ray.intersectPlane(groundPlane, groundHit) ? farmHit(groundHit.x, groundHit.z) : null;
+}
 const fmtBytes = b => b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b >= 1e6 ? Math.round(b / 1e6) + ' MB' : b >= 1e3 ? Math.round(b / 1e3) + ' KB' : (b || 0) + ' B';
 function refreshCard() {
   if (!cardSel || !model) return;
@@ -1427,6 +1834,7 @@ function refreshCard() {
       (PUBLIC ? '' : `<div class="acts"><a class="btn" href="?eco=misfit">Visit the island</a></div>`);
   } else {
     const b = world?.bs.get(cardSel) || houses.get(cardSel)?.b; if (!b) return closeCard();
+    if (b.form === 'plot' || b.form === 'section') html = farmCard(b); else {
     const p = model.places.find(x => x.id === cardSel) || b.p, dname = model.districts.find(x => x.id === p.district)?.name || '';
     const here = model.villagers.filter(v => v.place === p.id && v.state !== 'walking'), home = model.villagers.filter(v => v.home === p.id);
     const status = p.active ? `<span class="pill on">${p.status === 'run' ? 'watering' : p.status === 'alert' || p.status === 'latch' ? p.status : 'at work'}</span>` : `<span class="pill off">${esc(p.status || 'quiet')}</span>`;
@@ -1445,9 +1853,12 @@ function refreshCard() {
     if (ECO === 'misfit' && p.kind === 'hut') html += PRIVATE ? `<div class="sec"><h4>sort this folder</h4><div class="acts"><button class="btn" data-sort="hark" type="button">Sort to HARK</button><button class="btn" data-sort="personal" type="button">Sort to Personal</button></div><div class="note" id="sortNote">Every session from this folder follows the rule.</div></div>`
       : '<div class="note">Sorting happens on the private door only.</div>';
     if (ECO === 'misfit' && p.kind === 'house') html += '<div class="note">A session moves when the folder it works in is sorted: open one of the huts.</div>';
-  }
+  } }
+  // unchanged: leave the DOM alone (a 5 s poll would otherwise reset a scrolled "more runs" list)
+  if (cardEl.__html === html && cardEl.classList.contains('open')) return; cardEl.__html = html;
   cardEl.innerHTML = '<button class="x" type="button" aria-label="close">×</button>' + html; cardEl.classList.add('open');
   cardEl.querySelector('.x').onclick = closeCard;
+  const more = cardEl.querySelector('[data-more]'); if (more) more.onclick = () => { cardMore = !cardMore; refreshCard(); };
   cardEl.querySelectorAll('[data-sort]').forEach(bt => bt.onclick = async () => {
     const note = cardEl.querySelector('#sortNote'); note.textContent = 'sorting…';
     try { const r = await fetch(`/api/misfit/teach?place=${encodeURIComponent(bt.dataset.place || cardSel)}&eco=${bt.dataset.sort}`, { cache: 'no-store' }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status);
@@ -1461,7 +1872,9 @@ function refreshCard() {
 const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), downs = new Map(); let gesture = null;
 renderer.domElement.addEventListener('pointerdown', e => { downs.set(e.pointerId, 1);
   if (downs.size === 1) gesture = { x: e.clientX, y: e.clientY, t: performance.now(), travel: 0, multi: false }; else if (gesture) gesture.multi = true; });
-renderer.domElement.addEventListener('pointermove', e => { if (gesture && downs.has(e.pointerId)) gesture.travel = Math.max(gesture.travel, Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y)); });
+renderer.domElement.addEventListener('pointermove', e => { if (gesture && downs.has(e.pointerId)) gesture.travel = Math.max(gesture.travel, Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y));
+  if (e.buttons || e.pointerType === 'touch') hideTip(); else farmHover(e.clientX, e.clientY); });
+renderer.domElement.addEventListener('pointerleave', hideTip); renderer.domElement.addEventListener('wheel', hideTip, { passive: true });
 renderer.domElement.addEventListener('pointercancel', e => { downs.delete(e.pointerId); if (gesture) gesture.multi = true; if (!downs.size) gesture = null; });
 renderer.domElement.addEventListener('pointerup', e => {
   if (!downs.delete(e.pointerId) || !gesture) return; const g = gesture; if (downs.size) return; gesture = null;
@@ -1469,6 +1882,7 @@ renderer.domElement.addEventListener('pointerup', e => {
   if (PHONE) { let tr = null, td = 6.01;   // the nearest tag box within 6 px (a box under the finger is at 0)
     for (const t of tapRects) { const [r] = t, d = Math.hypot(Math.max(r[0] - e.clientX, 0, e.clientX - r[0] - r[2]), Math.max(r[1] - e.clientY, 0, e.clientY - r[1] - r[3])); if (d < td) { td = d; tr = t; } }
     if (tr) return tr[1].onclick(); }
+  const fh = farmPick(e.clientX, e.clientY); if (fh) { hideTip(); return showPlace((fh.sec || fh.plot).id); }
   ptr.set(e.clientX / W * 2 - 1, -(e.clientY / H) * 2 + 1); ray.setFromCamera(ptr, camera);
   const hit = ray.intersectObjects([terrainMesh, ...districtMeshes, ...houseGroup.children], false)[0]; if (!hit) return closeCard();
   const all = [...world.bs.values(), ...[...houses.values()].map(h => h.b)];
@@ -1476,17 +1890,8 @@ renderer.domElement.addEventListener('pointerup', e => {
   if (best && bd < 1.2) showPlace(best.id); else if (world.island && Math.hypot(world.island.x - hit.point.x, world.island.z - hit.point.z) < world.island.R + 3) showPlace('island'); else closeCard();
 });
 
-// ---------- the facility replay: the snapshot's events at their real time of day (the code side stays live) ----------
+// the facility's day: time of day of a moment (local clock), for the farm's replay above
 const DAY = 86400e3, todOf = ms => { const d = new Date(ms); return ((d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds()) * 1000 + d.getMilliseconds(); };
-const REPLAY_WALK = 40e3, REPLAY_HOLD = { run: 15 * 60e3, alert: 60 * 60e3, latch: 60 * 60e3, 'out-of-range': 30 * 60e3 };
-function replayNow(nowMs) {
-  const f = model?.facility; if (!f || f.demo || !f.events?.length) return { walkers: [], hold: [] };
-  const tn = todOf(nowMs), walkers = [], hold = [];
-  for (const e of f.events) { const ago = (tn - todOf(e.t) + DAY) % DAY;
-    if (ago < REPLAY_WALK) walkers.push({ id: 'replay-' + e.t + '-' + e.to, from: e.from, place: e.to, kind: e.kind, phase: ago / REPLAY_WALK });
-    if (ago < (REPLAY_HOLD[e.kind] || 0)) hold.push(e); }
-  return { walkers: walkers.slice(-24), hold };
-}
 
 // ---------- the public snapshot: its last 30 min of events, replayed in a 30-min loop on the viewer's clock ----------
 // (one walker per event: tool and helper work from a house to its place, a commit's gold tablet to the square; the
@@ -1518,7 +1923,7 @@ const looks = {
 function applyLook() {
   const L = looks[K.look] || looks.day;
   hemi.color.set(L.sky); hemi.groundColor.set(L.ground); hemi.intensity = L.hemi; sun.color.set(L.sun); sun.intensity = L.sunI;
-  lampU.value = L.lamp * 0.35; lampLitU.value = Math.max(0.6, L.lamp); buildMat.envMapIntensity = buildLitMat.envMapIntensity = L.env; fireMesh.material.color.set(L.fire);
+  lampU.value = L.lamp * 0.35; lampLitU.value = Math.max(0.6, L.lamp); buildMat.envMapIntensity = buildLitMat.envMapIntensity = L.env; waterPtsMat.uniforms.uGain.value = 0.75 + 0.25 * L.glow;
 }
 function applyLayout() { document.body.classList.toggle('minimal', K.layout === 'minimal'); document.body.classList.toggle('bare', K.layout === 'scene only'); }
 
@@ -1540,6 +1945,35 @@ function routeFor(id, from, to) { const k = from + '>' + to; if (routes.has(k)) 
 const C_BODY = C('#ece7dc'), C_GOLD = C('#d6b057'), C_IDLE = C('#8c877d'), C_DARK = C('#1d1b19'), C_REPLAY = C('#b8b2a4');
 let lastState = { working: 0, idle: 0, walking: 0, replay: 0, payloadWorking: 0, activePlaces: new Set(), byHome: new Map() };
 const SCRIBES = 6, SCRIBE_NAMES = ['reader 1', 'reader 2', 'reader 3', 'reader 4', 'reader 5', 'reader 6'];
+let farmNow = null, farmBuiltAt = 0;
+function drawFarm(t) {
+  const fm = world?.farmland; if (!fm) { waterPts.visible = false; return null; }
+  const S = farmAt(t);
+  cropU.uTime.value = farmTU.value = t; cropU.uP.value = farmPU.value = P;
+  cropU.uRise.value = source === 'demo' ? 1 : smooth(0, 1.6, pageNow() - farmBuiltAt);   // plants grow from the ground after a build
+  const a = farmSecU.value; a.fill(0);
+  for (const s of fm.secs) if (s.si < MAX_SEC) a[s.si] = S.wet[s.si] + (s.stage?.phase === 'resting' ? 2 : 0);
+  const fl = farmFillU.value, dp = farmPlotU.value; fl.fill(0); dp.fill(0);
+  for (const s of fm.secs) if (s.si < MAX_SEC) fl[s.si] = S.fill[s.si];
+  for (const b of fm.plots) dp[b.pi] = S.dip[b.pi];
+  // water, closed-form along its paths (a particle's place is fract(laps + i/k) of the way): always a slow, faint feed
+  // from the cistern down the canal to every reservoir (stronger while that reservoir refills); on a replayed run a fast
+  // stream from the plot's reservoir to the section's furrows, its front running out over the first fifth of the run and
+  // its tail draining over the last fifth
+  const pos = waterGeo.attributes.position.array, al = waterGeo.attributes.aA.array; let n = 0;
+  const put = (p, j, y, a) => { pos[n * 3] = p.x + Math.cos(p.dir) * j; pos[n * 3 + 1] = y; pos[n * 3 + 2] = p.z - Math.sin(p.dir) * j; al[n] = a; n++; };
+  fm.feeds ??= fm.plots.map(feedPath);
+  const slow = 4 * t / P, fast = 16 * t / P;
+  fm.plots.forEach((b, pi) => { const path = fm.feeds[pi], k = Math.round(path.len * 0.45), a = 0.42 + 0.58 * S.dip[b.pi];
+    for (let i = 0; i < k && n < WATER_CAP; i++) put(along(path, fract(slow + i / k)), (fract(i * 0.618) - 0.5) * 0.9, 0.2, a); });
+  for (const { r, age } of S.active) { const front = clamp(age / (r.eff * FRONT), 0, 1), tail = clamp((age - r.eff * 0.8) / (r.eff * 0.2), 0, 1);
+    for (const path of r.paths) { const k = Math.round(path.len * 0.8 * (0.5 + 0.9 * r.s));
+      for (let i = 0; i < k && n < WATER_CAP; i++) { const u = fract(fast + i / k); if (u > front || u < tail) continue;
+        put(along(path, u), (fract(i * 0.618) - 0.5) * 0.18, 0.27, (0.55 + 0.45 * r.s) * (0.6 + 0.4 * smooth(0.06, 0, front - u))); } } }
+  waterGeo.setDrawRange(0, n); waterGeo.attributes.position.needsUpdate = waterGeo.attributes.aA.needsUpdate = true; waterPts.visible = n > 0;
+  waterPtsMat.uniforms.uPx.value = H * renderer.getPixelRatio() / (2 * Math.tan(camera.fov * Math.PI / 360)); waterPtsMat.uniforms.uMin.value = 3.4 * renderer.getPixelRatio();
+  S.water = n; return S;
+}
 function draw(t) {
   if (!world || !model) { renderer.render(scene, camera); return; }
   frames++; const lod0 = lod; lod = lodNow();
@@ -1548,7 +1982,7 @@ function draw(t) {
   renderer.shadowMap.autoUpdate = fixedTime || lod !== 'overview';
   if (!renderer.shadowMap.autoUpdate && (lod0 !== lod || frames % 1800 === 0 || shadowDirty)) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; }
   const L = looks[K.look] || looks.day, demo = source === 'demo', nowMs = demo ? 0 : Date.now(), asleep = !demo && sleeping();
-  let nv = 0, nl = 0, nt = 0, nsc = 0, nd = 0, nf = 0, nr = 0, nc = 0, ng = 0, npin = 0;
+  let nv = 0, nl = 0, nt = 0, nsc = 0, nd = 0, nr = 0, nc = 0, ng = 0, npin = 0;
   const gpos = glowGeo.attributes.position.array, gcol = glowGeo.attributes.color.array, ppos = pinGeo.attributes.position.array;
   const addGlow = (x, y, z, c, k) => { if (ng >= glowCap) return; gpos[ng * 3] = x; gpos[ng * 3 + 1] = y; gpos[ng * 3 + 2] = z; gcol[ng * 3] = c.r * k; gcol[ng * 3 + 1] = c.g * k; gcol[ng * 3 + 2] = c.b * k; ng++; };
   const warm = C('#ffcf7a'), water = C('#cfe6ff');
@@ -1601,8 +2035,6 @@ function draw(t) {
     for (const id of chronicleWalks) { const r = routeFor(id, 'square', 'library'); const ph = (pn - seenWalk.get(id)) / (r ? clamp(r.len / 2.4, 6, 30) : 10); if (ph >= 0 && ph < 1) walks.push({ id, from: 'square', place: 'library', kind: 'commit', phase: ph }); }
     if (seenWalk.size > 2000) seenWalk.clear();
   }
-  const rep = demo ? { hold: [] } : replayNow(nowMs);
-  if (!demo) for (const w of rep.walkers) walks.push({ ...w, state: 'replay' });
   for (const w of walks) {
     const r = routeFor(w.id, w.from, w.place); if (!r || r.len < 0.5) continue;
     const p = along(r, w.phase), replay = w.state === 'replay';
@@ -1620,7 +2052,7 @@ function draw(t) {
       speaker = { x: sq.x + c * lx + s * lz, z: sq.z - s * lx + c * lz, text: lines[k], who: SCRIBE_NAMES[who], a: smooth(0, 0.5, t - slot * 5) * smooth(5, 4.4, t - slot * 5) }; } }
   // live work on the places: scaffold + rising gold course + dust while active; a treadwheel crane on tier 3 and up
   for (const id of st.activePlaces) {
-    const b = placeB(id); if (!b || b.p.kind === 'house' || b.p.kind === 'square' || b.p.kind === 'library') continue;
+    const b = placeB(id); if (!b || b.farmed || b.p.kind === 'house' || b.p.kind === 'square' || b.p.kind === 'library') continue;   // the farm shows its work as water
     const c = Math.cos(b.rot), s = Math.sin(b.rot), hw = b.hw + 0.5, hd = b.hd + 0.5, hgt = Math.min(b.top - 0.6, 9);
     const W2 = (lx, lz) => [b.x + c * lx + s * lz, b.z - s * lx + c * lz];
     if (b.p.kind !== 'room') {
@@ -1639,20 +2071,11 @@ function draw(t) {
     }
     if (nr < 200) { const pulse = fract(t / 2.5 + (hashStr(id) % 50) / 50); ringMesh.setMatrixAt(nr++, mtx.compose(tmpP.set(b.x, 0.08, b.z), tmpQ.identity(), tmpS.setScalar(b.R * (1.05 + pulse * 0.35)))); }
   }
-  // facility: water runs in a room's canal during a run, beacons burn for alerts and latches (the payload's live state,
-  // and the snapshot's events replayed at their times)
-  const flows = new Set(), fires = new Set();
-  for (const p of model.places) if (p.active && p.district === 'facility') { if (p.status === 'run') flows.add(p.id); if (p.status === 'alert' || p.status === 'latch') fires.add(p.id); }
-  for (const e of rep.hold) { if (e.kind === 'run') flows.add(e.to); if (e.kind === 'alert' || e.kind === 'latch') { fires.add(e.to); fires.add(e.from); } }
-  if (demo) for (const p of model.places) if (p.status === 'run') flows.add(p.id);
-  for (const id of flows) { const b = placeB(id); if (!b?.canal) continue; const [x0, z0, x1, z1] = b.canal, c = Math.cos(b.rot), s = Math.sin(b.rot);
-    for (let i = 0; i < 8; i++) { const u = fract(t * 0.35 + i / 8), lx = lerp(x0, x1, u), lz = lerp(z0, z1, u); addGlow(b.x + c * lx + s * lz, 0.2, b.z - s * lx + c * lz, water, L.glow * 1.2); } }
-  for (const id of fires) { const b = placeB(id); if (!b || nf >= 80) continue; const f = b.fire || [0, b.top - 0.8, 0], c = Math.cos(b.rot), s = Math.sin(b.rot);
-    const x = b.x + c * f[0] + s * f[2], z = b.z - s * f[0] + c * f[2], fl = 0.85 + 0.25 * Math.sin(tau * t * 1.7 + hashStr(id) % 9);
-    fireMesh.setMatrixAt(nf++, mtx.compose(tmpP.set(x, f[1], z), tmpQ.setFromAxisAngle(up, tau * t / 10), tmpS.set(1, fl, 1))); addGlow(x, f[1] + 0.6, z, warm, L.glow * 2.2); }
+  // the farm: the replayed day's water down the canals, wet soil, the clock (no alert or latch beacons: Max 10/29)
+  farmNow = drawFarm(t);
   // lamps: houses of working sessions glow at dusk and night
   for (const h of houses.values()) { const busy = h.b.p.active; h.mesh.material = busy ? buildLitMat : buildMat; if (busy && L.lamp > 0) addGlow(h.b.door.x, 1.4, h.b.door.z, warm, L.glow * 0.7); }
-  for (const [m, n] of [[bodyMesh, nv], [headMesh, nv], [hatMesh, nv], [armMesh, nv], [legMesh, nl], [tabletMesh, nt], [scaffMesh, nsc], [dustMesh, nd], [fireMesh, nf], [ringMesh, nr], [craneMesh, nc], [wheelMesh, nc]]) {
+  for (const [m, n] of [[bodyMesh, nv], [headMesh, nv], [hatMesh, nv], [armMesh, nv], [legMesh, nl], [tabletMesh, nt], [scaffMesh, nsc], [dustMesh, nd], [ringMesh, nr], [craneMesh, nc], [wheelMesh, nc]]) {
     m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   glowGeo.setDrawRange(0, ng); glowGeo.attributes.position.needsUpdate = glowGeo.attributes.color.needsUpdate = true; glowMat.size = K.look === 'day' ? 1.6 : 2.6;
   pinGeo.setDrawRange(0, npin); pinGeo.attributes.position.needsUpdate = true;
@@ -1851,6 +2274,21 @@ window.__villageState = () => ({ source, eco: ECO, frames, lod, pollMs: POLL_MS,
   working: lastState.working, idle: lastState.idle, walking: lastState.walking, replay: lastState.replay, payloadWorking: lastState.payloadWorking,
   cam: camera.position.toArray().map(v => +v.toFixed(2)), target: camTgt().toArray().map(v => +v.toFixed(2)), flying: !!flight, untouched,
   district: focusD, zoom: world ? camera.position.distanceTo(controls ? controls.target : camTarget) / (world.fitDist || 200) : null });
+// the farm, for the checks: plots and sections in order, each section's stage, plant height and plants, and what the
+// replay shows at the last drawn frame (lit = watering now, wet 0..1); a point on screen per plot or section; the loop
+// time (t in [0, P) under ?t=) at which replayed run i is mid-way, with the sections it waters
+window.__farm = () => { const fm = world?.farmland; if (!fm) return null; const per = cropMesh?.userData.per ?? 0;
+  return { plots: fm.plots.map(b => ({ id: b.id, name: b.p.name, sections: b.farmland.secs.map(s => s.id), dip: +(farmNow?.dip[b.pi] ?? 0).toFixed(3) })),
+    sections: fm.secs.map(s => ({ id: s.id, name: s.p.name, plot: s.plot.id, order: s.p.order ?? null, phase: s.stage?.phase, frac: s.stage?.frac ?? null, height: +(s.look?.h * FARM.cropH).toFixed(3), plants: s.look?.h > 0 ? per : 0,
+      lit: !!farmNow?.lit.has(s.si), wet: +(farmNow?.wet[s.si] ?? 0).toFixed(3), fill: +(farmNow?.fill[s.si] ?? 0).toFixed(3) })),
+    // how much of the walled city the farm spans: its far corners' radius over the wall's
+    span: +(Math.max(...fm.plots.map(b => { const q = plotBox(b); return Math.max(...[[q[0], q[1]], [q[2], q[1]], [q[0], q[3]], [q[2], q[3]]].map(([x, z]) => Math.hypot(x - fm.d.x, z - fm.d.z))); })) / (fm.d.R - 1)).toFixed(3),
+    day: replay?.key ?? null, runs: replay?.runs.length ?? 0, water: farmNow?.water ?? 0, clock: tagEls.get('clock')?.textContent ?? '' }; };
+window.__farmPoint = id => { const b = world?.bs.get(id); if (!b?.farmed) return null; camera.updateMatrixWorld(); const s = project(b.x, 0.16, b.z); return s.ok ? [Math.round(s.x), Math.round(s.y)] : null; };
+window.__farmRunAt = i => { const r = replay?.runs[i]; if (!r) return null; const at = ms => ((r.tod + ms) % DAY) / DAY * P;
+  return { t: at(r.eff / 2), end: at(r.eff), dryMs: DRY_MS, place: r.place, sections: r.secs.map(si => world.farmland.secs[si].id) }; };
+window.__farmPick = (x, y) => { const h = farmPick(x, y); return h ? (h.sec || h.plot).id : null; };
+window.__demoPayload = () => makeDemo();
 window.renderAt = t => { if (fixedTime) { t = ((t % P) + P) % P; orbitCam(t); } draw(t); };
 
 // ---------- knobs ----------
@@ -1862,8 +2300,23 @@ function addKnobs() { if (!window.Knobs) return;
 let lastT = 0; const redraw = () => window.renderAt(lastT);
 window.__selfCheck = () => {
   const out = [], all = [...world.bs.values(), ...[...houses.values()].map(h => h.b)];
-  let clash = 0; for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) if (Math.hypot(all[i].x - all[j].x, all[i].z - all[j].z) < all[i].R + all[j].R - 0.01) clash++;
+  // footprints are circles, but a plot is a box (its circle is its half-diagonal): plot against plot is box against box, and
+  // a room's strip stands inside its own plot by design (checked below instead)
+  const box = b => { const f = b.farmland, hx = Math.abs(Math.sin(b.rot)) > 0.5 ? f.D / 2 : f.W / 2, hz = Math.abs(Math.sin(b.rot)) > 0.5 ? f.W / 2 : f.D / 2; return [b.x - hx, b.z - hz, b.x + hx, b.z + hz]; };
+  const hitPair = (a, b) => { if (a.form === 'section' && (b === a.plot || (b.form === 'section' && b.plot === a.plot && Math.hypot(a.x - b.x, a.z - b.z) >= FARM.secW - 0.01))) return false;
+    if (b.form === 'section' && a === b.plot) return false;
+    if (a.form === 'plot' && b.form === 'plot') { const p = box(a), q = box(b); return p[0] < q[2] && q[0] < p[2] && p[1] < q[3] && q[1] < p[3]; }
+    const [pl, o] = a.form === 'plot' ? [a, b] : b.form === 'plot' ? [b, a] : [null, null];
+    if (pl) { const q = box(pl), dx = Math.max(q[0] - o.x, 0, o.x - q[2]), dz = Math.max(q[1] - o.z, 0, o.z - q[3]); return Math.hypot(dx, dz) < o.R - 0.01; }
+    return Math.hypot(a.x - b.x, a.z - b.z) < a.R + b.R - 0.01; };
+  let clash = 0; for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) if (hitPair(all[i], all[j])) clash++;
   out.push(['no building footprints overlap', clash === 0, clash + ' overlaps']);
+  if (world.farmland) { const fm = world.farmland, rooms = model.places.filter(p => p.kind === 'room' && p.building), blds = model.places.filter(p => p.kind === 'building' && FACILITY_IDS.has(p.district));
+    out.push(['farm: one plot per building, one section per room', fm.plots.length === blds.length && fm.secs.length === rooms.length, `${fm.plots.length} plots / ${blds.length} buildings · ${fm.secs.length} sections / ${rooms.length} rooms`]);
+    const inside = fm.secs.every(s => { const p = worldToPlot(s.plot, s.x, s.z); return Math.abs(p.lx) + FARM.secW / 2 <= s.plot.farmland.W / 2 + 1e-6 && Math.abs(p.lz) + FARM.secD / 2 <= s.plot.farmland.D / 2 + 1e-6; });
+    out.push(['farm: every section inside its plot, in the payload order', inside && fm.plots.every(b => b.farmland.secs.every((s, i, a) => !i || secOrder(a[i - 1], s) < 0))]);
+    const fl = fm.secs.filter(s => s.stage?.phase === 'flower' && s.stage.frac != null).sort((a, b) => a.stage.frac - b.stage.frac);
+    out.push(['farm: crop height rises with days into flower; resting is bare', fl.every((s, i) => !i || s.look.h >= fl[i - 1].look.h) && fm.secs.filter(s => s.stage?.phase === 'resting').every(s => s.look.h === 0), `${fl.length} flower sections`]); }
   const q = world.districts; let gap = 1e9; for (let i = 0; i < q.length; i++) for (let j = i + 1; j < q.length; j++) gap = Math.min(gap, Math.hypot(q[i].x - q[j].x, q[i].z - q[j].z) - q[i].R - q[j].R);
   out.push(['open ground between every two quarters', q.length < 2 || gap >= 4, (q.length < 2 ? '-' : gap.toFixed(1)) + ' min gap']);
   const missing = model.places.filter(p => !placeB(p.id)).length, built = world.bs.size + houses.size;
