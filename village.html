@@ -153,7 +153,7 @@ body.bare #header, body.bare #stamp, body.bare #legend, body.bare #views, body.b
 <div id="labels"><svg id="leaders"><path></path><g></g></svg></div>
 <div id="bubble"></div>
 <div id="header">
-  <a id="globeLink" class="btn" href="#"><span aria-hidden="true">←</span><span class="lg"> Globe</span></a>
+  <a id="globeLink" class="btn" href="#" aria-label="Globe"><span aria-hidden="true">←</span><span class="lg"> Globe</span></a>
   <div id="brand"><span class="eco">Ecosystem </span><span class="gold">Village</span></div>
   <nav id="ecos"><a data-eco="hark">HARK</a><a data-eco="personal">Personal</a><a data-eco="misfit">Misfits</a></nav>
   <div id="crumb"></div>
@@ -181,7 +181,9 @@ import { MapControls } from 'three/addons/controls/MapControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const q = new URLSearchParams(location.search);
-const PUBLIC = q.get('public') === '1';
+// the public door: ?public=1, or any https copy (final review m4: a bare Pages link has no ?public=1, and the private feed
+// is only ever plain http on loopback, so an https page can only be the published snapshot)
+const PUBLIC = q.get('public') === '1' || location.protocol === 'https:';
 // the public door publishes no misfit village (its count rides on the others): ?eco=misfit there opens HARK
 const ECO = ['hark', 'personal', 'misfit'].includes(q.get('eco')) && !(PUBLIC && q.get('eco') === 'misfit') ? q.get('eco') : 'hark';
 const tparam = q.get('t'), fixedTime = tparam != null;
@@ -740,8 +742,16 @@ const F = {
   // it); a header ditch along the front from the reservoir's outlet; a lane down each column; the rooms are soil strips
   // (pattern 100 + section index) with furrows between the plant rows (pattern 400 + section index: they fill on a run)
   plot(g, b) { const f = b.farmland, A = FARM, W = f.W, D = f.D, fx = v => f.sgn * (v - W / 2);
-    g.box(0, -0.3, 0, W, 0.36, D, PAL.wood, 1);
-    for (const s of [-1, 1]) { g.box(0, 0, s * (D / 2 - 0.16), W, 0.28, 0.32, PAL.mud, 8); g.box(s * (W / 2 - 0.16), 0, 0, 0.32, 0.28, D, PAL.mud, 8); }
+    // a plot with fewer rooms than rows × cols leaves the far end of its last row unused: the plot stops there (its bed and
+    // rim step round the corner), so the unused slots are the quarter's plain ground, never an empty room-sized cell
+    const n = f.secs.length, rowEnd = r => -D / 2 + A.head + r * A.secD + (r - 1) * A.rowGap;
+    const cut = n < f.rows * f.cols ? { v: A.rim + A.res + (n % f.cols) * f.pitch + 0.1, z: rowEnd(f.rows - 1) + A.rowGap / 2 } : null;
+    const bed = (v0, v1, z0, z1) => g.box(fx((v0 + v1) / 2), -0.3, (z0 + z1) / 2, v1 - v0, 0.36, z1 - z0, PAL.wood, 1);
+    const rimV = (v0, v1, z) => g.box(fx((v0 + v1) / 2), 0, z, v1 - v0, 0.28, 0.32, PAL.mud, 8), rimZ = (v, z0, z1) => g.box(fx(v), 0, (z0 + z1) / 2, 0.32, 0.28, z1 - z0, PAL.mud, 8);
+    if (!cut) { bed(0, W, -D / 2, D / 2); rimV(0, W, D / 2 - 0.16); rimZ(W - 0.16, -D / 2, D / 2); }
+    else { bed(0, W, -D / 2, cut.z); bed(0, cut.v, cut.z, D / 2); rimV(0, cut.v, D / 2 - 0.16); rimZ(W - 0.16, -D / 2, cut.z);
+      rimV(cut.v, W, cut.z + 0.16); rimZ(cut.v + 0.16, cut.z, D / 2); }
+    rimV(0, W, -D / 2 + 0.16); rimZ(0.16, -D / 2, D / 2);
     // the reservoir: walls, two steps down inside, gold coping on the canal side, the water
     const rx = fx(A.rim + A.res / 2), rw = A.res - 0.5, rd = D - 2 * A.rim - 0.4;
     for (const s of [-1, 1]) { g.box(rx, 0, s * (rd / 2 - 0.2), rw, 0.62, 0.4, PAL.mud, 8); g.box(rx + s * (rw / 2 - 0.2), 0, 0, 0.4, 0.62, rd, PAL.mud, 8);
@@ -752,7 +762,8 @@ const F = {
     const hz = -D / 2 + A.head * 0.5, h0 = A.rim + A.res, hl = W - h0 - A.rim;
     g.box(fx(h0 + hl / 2), 0, hz, hl, 0.1, 0.55, PAL.water, 13); for (const s of [-1, 1]) g.box(fx(h0 + hl / 2), 0, hz + s * 0.38, hl, 0.2, 0.2, PAL.mud3, 8);
     g.box(fx(h0 - 0.1), 0, hz, 0.4, 0.66, 0.9, PAL.gold, 9);   // the outlet's gold sluice
-    for (let c = 0; c < f.cols; c++) { const lx = fx(h0 + c * f.pitch + A.lane / 2), z0 = hz + 0.3, z1 = -D / 2 + A.head + f.rows * A.secD + (f.rows - 1) * A.rowGap;
+    // a lane runs down its column as far as the column's last room
+    for (let c = 0; c < f.cols; c++) { const lx = fx(h0 + c * f.pitch + A.lane / 2), z0 = hz + 0.3, z1 = rowEnd(Math.floor((n - 1 - c) / f.cols) + 1);
       g.box(lx, 0, (z0 + z1) / 2, A.lane * 0.6, 0.19, z1 - z0, PAL.water, 13); }
     for (const s of f.secs) { const si = Math.min(s.si, MAX_SEC - 1);
       g.box(s.farmland.lx, 0, s.farmland.lz, A.secW, 0.16, A.secD, PAL.mud3, 8, { top: PAL.soil, topPat: 100 + si });
@@ -1016,20 +1027,29 @@ function layoutFarm(x, sorted, ctx, placed) {
   const best = (n, want) => { let b = null; for (let c = 1; c <= n; c++) { const sh = shape(n, c), k = want(sh) + 0.01 * c; if (!b || k < b.k) b = { ...sh, k }; } return b; };
   const top = main ? main.R : 0, cz0 = top + 1.4 + A.cistR, pairs = Math.floor(plots.length / 2), cap = plots.length % 2 ? plots[plots.length - 1] : null;
   // Pairs face each other across the canal, rows down it; an odd last plot lies across the canal's end. The plots'
-  // proportions (W against D) are searched so the whole farm, tower included, sits as squarely as it can in its round
-  // wall: the smallest circle round its footprint for the ground it covers (the wall then hugs it; Max: spread it out).
-  const trial = ratio => { const L = []; let z = cz0 + A.cistR + 2, xMax = top;
+  // proportions (W against D) are searched so the whole farm, tower included, fills its round wall as fully as it can:
+  // the smallest circle round its footprint for the ground the plots cover (the wall then hugs it; Max: spread it out).
+  const trial = (ratio, capCols) => { const L = []; let z = cz0 + A.cistR + 2;
     for (let k = 0; k < pairs; k++) { const pr = [plots[2 * k], plots[2 * k + 1]].map(b => ({ b, ...best(Math.max(1, secsOf.get(b.id).length), sh => Math.abs(sh.W - ratio * sh.D)) }));
-      pr.forEach((q, j) => { const side = j ? 1 : -1; q.side = side; q.rot = side * Math.PI / 2; q.sgn = -side; q.x = side * (A.spineW / 2 + A.bank + q.D / 2); q.z = z + q.W / 2; xMax = Math.max(xMax, Math.abs(q.x) + q.D / 2); L.push(q); });
+      pr.forEach((q, j) => { const side = j ? 1 : -1; q.side = side; q.rot = side * Math.PI / 2; q.sgn = -side; q.x = side * (A.spineW / 2 + A.bank + q.D / 2); q.z = z + q.W / 2; L.push(q); });
       z += Math.max(...pr.map(q => q.W)) + A.plotGap; }
     let z1 = z - A.plotGap;
-    if (cap) { const width = pairs ? 2 * xMax : 0, q = { b: cap, ...best(Math.max(1, secsOf.get(cap.id).length), sh => pairs ? Math.abs(sh.W - width) : Math.abs(sh.W - ratio * sh.D)) };
-      z1 = z; q.side = 0; q.rot = 0; q.sgn = 1; q.x = 0; q.z = z + q.D / 2; L.push(q); xMax = Math.max(xMax, q.W / 2); z += q.D; }
-    const zb = cap ? z : z1, cx = 0, cz = (-top + zb) / 2;
+    if (cap) { const q = { b: cap, ...shape(Math.max(1, secsOf.get(cap.id).length), capCols) };
+      z1 = z; q.side = 0; q.rot = 0; q.sgn = 1; q.x = 0; q.z = z + q.D / 2; L.push(q); z += q.D; }
+    const zb = cap ? z : z1;
     const pts = L.flatMap(q => { const hx = q.side ? q.D / 2 : q.W / 2, hz = q.side ? q.W / 2 : q.D / 2; return [[q.x - hx, q.z - hz], [q.x + hx, q.z - hz], [q.x - hx, q.z + hz], [q.x + hx, q.z + hz]]; });
-    const R = Math.max(top + Math.abs(cz), ...pts.map(([px, pz]) => Math.hypot(px - cx, pz - cz))), w = 2 * Math.max(xMax, ...pts.map(([px]) => Math.abs(px))), h = zb + top;
-    return { L, cz, z1, score: R * R / (w * h) }; };   // the farm's whole footprint as square as it can be in its round wall
-  let pick = null; for (let r = 0.3; r <= 3.01; r += 0.1) { const t = trial(r); if (!pick || t.score < pick.score) pick = t; }
+    // the wall's centre: the smallest circle round the tower, the cistern and every plot corner, not the middle of the
+    // farm's box. The farm is narrow at the tower and wide further down, so that circle is smaller than the one round the
+    // box's middle and the wall hugs the farm (Max 10/29: tighten the margins). The layout is mirrored about the canal, so
+    // the centre is searched along it (x = 0): the farthest point's distance is convex in cz (ternary search).
+    const reach = c => Math.max(top + Math.abs(c), Math.abs(cz0 - c) + A.cistR + 1, ...pts.map(([px, pz]) => Math.hypot(px, pz - c)));
+    let lo = -top, hi = zb; for (let k = 0; k < 48; k++) { const m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3; if (reach(m1) < reach(m2)) hi = m2; else lo = m1; }
+    const cz = (lo + hi) / 2, R = reach(cz);
+    return { L, cz, z1, score: R * R / L.reduce((a, q) => a + q.W * q.D, 0) }; };   // the least empty ground inside the round wall
+  // every plot proportion, and every column count for a plot across the canal's end (narrower and deeper than the pairs
+  // when that fills the wall's round end better, Max 10/29: "tighten" the margins below the end plot)
+  const capN = cap ? Math.max(1, secsOf.get(cap.id).length) : 0;
+  let pick = null; for (let r = 0.3; r <= 3.01; r += 0.1) for (let c = cap ? 1 : 0; c <= capN; c++) { const t = trial(r, c); if (!pick || t.score < pick.score) pick = t; }
   for (const q of pick.L) { const b = q.b, secs = secsOf.get(b.id);
     b.farmland = { cols: q.cols, rows: q.rows, W: q.W, D: q.D, pitch: A.pitch, secs, side: q.side, sgn: q.sgn, cap: !q.side };
     b.R = Math.hypot(q.W, q.D) / 2; b.farmed = true; b.rot = q.rot; b.x = q.x; b.z = q.z - pick.cz;
@@ -1074,6 +1094,8 @@ function farmHit(x, z) {
   const fm = world?.farmland; if (!fm) return null;
   for (const b of fm.plots) { const p = worldToPlot(b, x, z); if (Math.abs(p.lx) > b.farmland.W / 2 || Math.abs(p.lz) > b.farmland.D / 2) continue;
     const sec = b.farmland.secs.find(s => Math.abs(p.lx - s.farmland.lx) <= FARM.secW / 2 + FARM.lane / 2 && Math.abs(p.lz - s.farmland.lz) <= FARM.secD / 2 + FARM.rowGap / 2);
+    const f = b.farmland, n = f.secs.length;   // the unused corner (plot() leaves it plain ground) is not the plot
+    if (!sec && n < f.rows * f.cols && f.sgn * p.lx + f.W / 2 > FARM.rim + FARM.res + (n % f.cols) * FARM.pitch && p.lz > -f.D / 2 + FARM.head + (f.rows - 1) * (FARM.secD + FARM.rowGap) - FARM.rowGap / 2) continue;
     return { plot: b, sec: sec || null }; }
   return null;
 }
@@ -1307,16 +1329,24 @@ const waterPts = new THREE.Points(waterGeo, waterPtsMat); waterPts.frustumCulled
 const REPLAY_LOOP_MS = 10 * 60e3;          // knob: 24 h of runs in ~10 min
 const SHOW_MIN = 20 * 60e3, DRY_MS = 60 * 60e3, REFILL_MS = 45 * 60e3;   // …and a reservoir refills over 45 min of the day   // a run's water shows at least 20 min of the day; wet soil dries back over 1 h of the day
 const DEMO_NOW = new Date(2026, 9, 29, 6, 10).getTime();
-const dayKey = ms => { const d = new Date(ms); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+// the facility's clock (review M6): a run's day, its time of day and the replay's weekday are the facility's (Pacific),
+// whatever zone the viewer is in, so a viewer elsewhere replays the same day as the Mac does
+const FAC_CLOCK = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hourCycle: 'h23', weekday: 'short', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' });
+const facParts = ms => { const o = {}; for (const x of FAC_CLOCK.formatToParts(ms)) o[x.type] = x.value; return o; };
+const dayKey = ms => { const o = facParts(ms); return +o.year * 10000 + +o.month * 100 + +o.day; };
 let replay = null;   // { key, label, runs: [{ tod, eff, secs, paths, s }] }
 const runPlot = r => { const b = placeB(r.place); return !b ? null : b.form === 'plot' ? b : b.form === 'section' ? b.plot : null; };
-const runSecs = r => { const b = placeB(r.place); if (!b) return [];   // a run on a building place is the veg tank: its veg and mother rooms
-  return b.form === 'section' ? [b] : b.form === 'plot' ? b.farmland.secs.filter(s => s.p.roomKind === 'veg' || s.p.roomKind === 'mother') : []; };
+// a run on a building place: its veg tank waters its veg and mother rooms; any other tank zone (a batch or drop tank, a zone
+// the feed could not place in a room) lights no room, only the plot's header ditch (review M5). A payload from before
+// events carried a zone reads every building run as the veg tank, as it did.
+const runSecs = r => { const b = placeB(r.place); if (!b) return [];
+  if (b.form === 'section') return [b];
+  return b.form === 'plot' && (r.zone == null || r.zone === 'Veg tank') ? b.farmland.secs.filter(s => s.p.roomKind === 'veg' || s.p.roomKind === 'mother') : []; };
 function buildReplay() {
   // the replay reads the run EVENTS (every run of the kept days, also on the public copy), not facility.runs: the public
   // copy caps that table list at 20 runs per building, which would replay only a day's last hours (review I1)
   const evRuns = (model?.facility?.events ?? []).filter(e => e?.kind === 'run' && Number.isFinite(e.t) && e.to)
-    .map(e => ({ t: e.t, end: null, place: e.to, min: e.min ?? null, gal: e.gal ?? null, flow: e.flow ?? null }));
+    .map(e => ({ t: e.t, end: null, place: e.to, zone: e.zone ?? null, min: e.min ?? null, gal: e.gal ?? null, flow: e.flow ?? null }));
   replay = null; const fm = world?.farmland, runs = evRuns.length ? evRuns : model?.facility?.runs; if (!fm || !Array.isArray(runs) || !runs.length) return;
   const today = dayKey(source === 'demo' ? DEMO_NOW : Date.now()), keys = [...new Set(runs.map(r => dayKey(r.t)))].sort((a, b) => a - b);
   const key = keys.filter(k => k < today).pop() ?? keys[keys.length - 1], day = runs.filter(r => dayKey(r.t) === key && runPlot(r));
@@ -1330,7 +1360,7 @@ function buildReplay() {
   // runs at once take it to its lowest mark. It refills over REFILL_MS of the day after the run.
   const gals = out.map(r => r.gal).filter(v => v != null).sort((a, b) => a - b), mid = gals.length ? gals[gals.length >> 1] : 1, ref = 3 * mid;
   for (const r of out) r.draw = (r.gal ?? mid) / ref;
-  replay = { key, label: new Date(day[0]?.t ?? runs[runs.length - 1].t).toLocaleDateString([], { weekday: 'short' }), runs: out };
+  replay = { key, label: facParts(day[0]?.t ?? runs[runs.length - 1].t).weekday, runs: out };
 }
 const loopFrac = t => source === 'demo' ? fract(t / P) : (Date.now() % REPLAY_LOOP_MS) / REPLAY_LOOP_MS;
 // the farm at loop time t: which sections are watering, how wet each is, how far down its furrows the water has run,
@@ -1901,8 +1931,8 @@ renderer.domElement.addEventListener('pointerup', e => {
   if (best && bd < 1.2) showPlace(best.id); else if (world.island && Math.hypot(world.island.x - hit.point.x, world.island.z - hit.point.z) < world.island.R + 3) showPlace('island'); else closeCard();
 });
 
-// the facility's day: time of day of a moment (local clock), for the farm's replay above
-const DAY = 86400e3, todOf = ms => { const d = new Date(ms); return ((d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds()) * 1000 + d.getMilliseconds(); };
+// the facility's day: time of day of a moment on the facility's clock (FAC_CLOCK, Pacific), for the farm's replay above
+const DAY = 86400e3, todOf = ms => { const o = facParts(ms); return ((+o.hour * 60 + +o.minute) * 60 + +o.second) * 1000 + ((ms % 1000) + 1000) % 1000; };
 
 // ---------- the public snapshot: its last 30 min of events, replayed in a 30-min loop on the viewer's clock ----------
 // (one walker per event: tool and helper work from a house to its place, a commit's gold tablet to the square; the
@@ -2154,7 +2184,9 @@ function flyToPlace(id) {
 }
 const showPlace = id => { openCard(id); flyToPlace(id); };
 if (controls) controls.addEventListener('start', () => { flight = null; });
-addEventListener('keydown', () => { flight = null; });
+// a bare modifier (Shift, Ctrl, Alt, Cmd, Caps Lock) or Tab does not stop it: only a key that does something (fly-to review)
+const IDLE_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Fn', 'AltGraph']);
+addEventListener('keydown', e => { if (!IDLE_KEYS.has(e.key)) flight = null; });
 // Street: the square seen with the library behind it, from the first pose (nearest and lowest first) that a probe camera
 // finds clear. Every building is projected as a box (footprint × height) through the probe's full frustum: the pose is
 // rejected if the camera stands in a footprint, if a building nearer than the square covers part of the square on screen,
@@ -2217,6 +2249,7 @@ function freeArea() {
   return { zones: [], safe: [10 + insetL, phoneTop() + 4, W - 10 - insetR, Math.min(H - 10, ...bars.map(r => r.top - 8))] };
 }
 function overviewCam() {
+  flight = null;   // a resize or rotation re-frames: a flight toward the old pose must not fight it (fly-to review); __view flies after this
   const pts = fitPoints(), V = THREE.Vector3;
   // a phone held upright looks down more steeply: the round island stands taller in the tall free band
   const { zones, safe } = freeArea(), pitch = PHONE && W < H ? 1.2 : 0.95, sp = Math.sin(pitch), cp = Math.cos(pitch), v = new V();
@@ -2243,7 +2276,7 @@ window.__view = name => {
 };
 function frameStart() { framed = true; layoutPhone(); overviewCam(); const dq = q.get('district'); if (dq) focusDistrict(dq); }
 // the overview distance (the zoom LOD's yardstick) for the current size, without moving the camera
-function refit() { if (!world) return; const p = camera.position.clone(), t = (controls ? controls.target : camTarget).clone(), u = untouched; overviewCam(); setCam(p.x, p.y, p.z, t.x, t.y, t.z); untouched = u; }
+function refit() { if (!world) return; flight = null; const p = camera.position.clone(), t = (controls ? controls.target : camTarget).clone(), u = untouched; overviewCam(); setCam(p.x, p.y, p.z, t.x, t.y, t.z); untouched = u; }
 function orbitCam(t) {
   const dq = q.get('district'), d = dq && world.byD.get(dq), a = tau * t / P + 0.6;
   let cx = d ? d.x : 0, cz = d ? d.z : 0, r = d ? d.R * 1.3 + 16 : world.landR * 1.15 + 18;
@@ -2289,16 +2322,22 @@ window.__villageState = () => ({ source, eco: ECO, frames, lod, pollMs: POLL_MS,
 // replay shows at the last drawn frame (lit = watering now, wet 0..1); a point on screen per plot or section; the loop
 // time (t in [0, P) under ?t=) at which replayed run i is mid-way, with the sections it waters
 window.__farm = () => { const fm = world?.farmland; if (!fm) return null; const per = cropMesh?.userData.per ?? 0;
-  return { plots: fm.plots.map(b => ({ id: b.id, name: b.p.name, sections: b.farmland.secs.map(s => s.id), dip: +(farmNow?.dip[b.pi] ?? 0).toFixed(3) })),
+  // cutAt: the middle of a plot's unused corner (fewer rooms than rows × cols), in world x, z; null when every slot is a room
+  const cutAt = b => { const f = b.farmland, n = f.secs.length; if (n >= f.rows * f.cols) return null;
+    const v = (FARM.rim + FARM.res + (n % f.cols) * FARM.pitch + f.W) / 2, z = (-f.D / 2 + FARM.head + (f.rows - 1) * (FARM.secD + FARM.rowGap) + f.D / 2) / 2, w = plotToWorld(b, f.sgn * (v - f.W / 2), z);
+    return [+w.x.toFixed(2), +w.z.toFixed(2)]; };
+  return { plots: fm.plots.map(b => ({ id: b.id, name: b.p.name, sections: b.farmland.secs.map(s => s.id), dip: +(farmNow?.dip[b.pi] ?? 0).toFixed(3), cutAt: cutAt(b) })),
     sections: fm.secs.map(s => ({ id: s.id, name: s.p.name, plot: s.plot.id, order: s.p.order ?? null, phase: s.stage?.phase, frac: s.stage?.frac ?? null, height: +(s.look?.h * FARM.cropH).toFixed(3), plants: s.look?.h > 0 ? per : 0,
       lit: !!farmNow?.lit.has(s.si), wet: +(farmNow?.wet[s.si] ?? 0).toFixed(3), fill: +(farmNow?.fill[s.si] ?? 0).toFixed(3) })),
     // how much of the walled city the farm spans: its far corners' radius over the wall's
     span: +(Math.max(...fm.plots.map(b => { const q = plotBox(b); return Math.max(...[[q[0], q[1]], [q[2], q[1]], [q[0], q[3]], [q[2], q[3]]].map(([x, z]) => Math.hypot(x - fm.d.x, z - fm.d.z))); })) / (fm.d.R - 1)).toFixed(3),
+    fill: +(fm.plots.reduce((a, b) => a + b.farmland.W * b.farmland.D, 0) / (Math.PI * fm.d.R ** 2)).toFixed(3),   // the plots' share of the walled ground
     day: replay?.key ?? null, runs: replay?.runs.length ?? 0, water: farmNow?.water ?? 0, clock: tagEls.get('clock')?.textContent ?? '' }; };
 window.__farmPoint = id => { const b = world?.bs.get(id); if (!b?.farmed) return null; camera.updateMatrixWorld(); const s = project(b.x, 0.16, b.z); return s.ok ? [Math.round(s.x), Math.round(s.y)] : null; };
 window.__farmRunAt = i => { const r = replay?.runs[i]; if (!r) return null; const at = ms => ((r.tod + ms) % DAY) / DAY * P;
   return { t: at(r.eff / 2), end: at(r.eff), dryMs: DRY_MS, place: r.place, sections: r.secs.map(si => world.farmland.secs[si].id) }; };
 window.__farmPick = (x, y) => { const h = farmPick(x, y); return h ? (h.sec || h.plot).id : null; };
+window.__farmHitAt = (x, z) => { const h = farmHit(x, z); return h ? (h.sec || h.plot).id : null; };   // what stands on a ground point
 window.__demoPayload = () => makeDemo();
 window.renderAt = t => { if (fixedTime) { t = ((t % P) + P) % P; orbitCam(t); } draw(t); };
 
