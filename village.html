@@ -13,6 +13,7 @@ canvas { display: block; position: absolute; left: 0; top: 0; }
   background: linear-gradient(180deg, rgba(10,10,10,.94) 62%, rgba(10,10,10,0)); }
 #brand { font-size: 11px; letter-spacing: .3em; font-weight: 800; text-transform: uppercase; white-space: nowrap; }
 #ecos { display: flex; gap: 2px; }
+#globeLink { text-decoration: none; }   /* back to this ecosystem's globe (set by the script; hidden where there is none) */
 #ecos a { font: 700 9px Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; padding: 5px 8px; border-radius: 4px; color: var(--faint); text-decoration: none; border: 1px solid transparent; }
 #ecos a:hover { color: #fff; }
 #ecos a.on { color: #000; background: var(--gold); border-color: #c99a35; }
@@ -52,16 +53,16 @@ canvas { display: block; position: absolute; left: 0; top: 0; }
 #views { position: absolute; right: 14px; bottom: 14px; z-index: 5; display: flex; gap: 6px; }
 #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
 .tag { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: auto; cursor: pointer; background: var(--red); color: #000; border: 1px solid #000;
-  font: 300 12px/1 var(--tagf); padding: 3px 5px 2px; }
+  font: 500 12px/1 var(--tagf); letter-spacing: -.01em; padding: 3px 4px 2px; }   /* 500, not 300: the black on red reads thicker (Max 10/29); the tracking and a px of padding give back the width the weight adds */
 #leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 #leaders path { stroke: rgba(242,240,234,.75); stroke-width: 0.8; fill: none; }
 #leaders circle { fill: rgba(242,240,234,.85); }
-.tag.big { font-weight: 500; font-size: 13.5px; letter-spacing: .04em; }
+.tag.big { font-weight: 600; font-size: 13.5px; letter-spacing: .025em; }
 .tag.act { box-shadow: inset 4px 0 0 #000; padding-left: 9px; }
-.tag .n { font-weight: 500; margin-left: 5px; }
+.tag .n { font-weight: 600; margin-left: 5px; }
 .dtag { position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: auto; cursor: pointer; background: var(--red); color: #000; border: 1px solid #000;
-  font: 500 15px/1 var(--tagf); letter-spacing: .22em; text-transform: uppercase; padding: 5px 7px 4px 9px; outline: 1px solid rgba(242,240,234,.35); outline-offset: 2px; }
-.dtag small { display: block; margin-top: 4px; font: 500 12px/1 var(--tagf); letter-spacing: .12em; }
+  font: 600 15px/1 var(--tagf); letter-spacing: .2em; text-transform: uppercase; padding: 5px 7px 4px 9px; outline: 1px solid rgba(242,240,234,.35); outline-offset: 2px; }
+.dtag small { display: block; margin-top: 4px; font: 600 12px/1 var(--tagf); letter-spacing: .1em; }
 .hid { display: none !important; }
 #bubble { position: absolute; left: 0; top: 0; z-index: 4; max-width: 300px; background: #f2f0ea; color: #0a0a0a; border: 1px solid #000; border-radius: 2px; padding: 6px 9px 7px;
   font: 12px/1.35 system-ui, sans-serif; pointer-events: none; display: none; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
@@ -78,6 +79,8 @@ body.bare #header, body.bare #stamp, body.bare #legend, body.bare #views, body.b
   #header { height: auto; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: calc(8px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 10px calc(12px + env(safe-area-inset-left));
     background: linear-gradient(180deg, rgba(10,10,10,.96) 78%, rgba(10,10,10,0)); }
   #brand .eco { display: none; }
+  #globeLink { min-height: 32px; min-width: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
+  #globeLink .lg { display: none; }
   #brand { font-size: 12px; letter-spacing: .32em; }
   #ecos { margin-left: auto; }
   #ecos a { font-size: 10px; padding: 9px 9px; }
@@ -114,7 +117,7 @@ body.bare #header, body.bare #stamp, body.bare #legend, body.bare #views, body.b
      pointerup against the placed tag boxes (the script's tapRects) */
   .tag, .dtag { pointer-events: none; }
   /* the overview's quarter names: one line, "INFRASTRUCTURE 25", in the black bands round the island */
-  .dtag.slim { font-size: 10.5px; letter-spacing: .14em; padding: 3px 5px 2px 6px; outline: 0; }
+  .dtag.slim { font-size: 10.5px; font-weight: 600; letter-spacing: .14em; padding: 3px 5px 2px 6px; outline: 0; }
   .dtag.slim .n { margin-left: 6px; letter-spacing: .04em; }
   #header, #stamp, #views, #legend, #card, #scrim { touch-action: manipulation; }   /* no double-tap zoom on the HUD; pinch still zooms text */
   /* turned sideways: the header is one row (brand, tabs, then the counters and Refresh at the right), the island gets the height */
@@ -124,7 +127,8 @@ body.bare #header, body.bare #stamp, body.bare #legend, body.bare #views, body.b
     #hrow2 { flex: 0 1 auto; margin-left: auto; gap: 10px; }
     #stats { gap: 14px; }
   }
-  @media (orientation: landscape) and (max-width: 640px) { #brand { display: none; } }   /* 568 wide: the tabs name the village */
+  @media (orientation: landscape) and (max-width: 640px) { #brand { display: none; } }
+  @media (max-width: 340px) { #brand { letter-spacing: .16em; } #ecos a { padding: 9px 5px; } #header { gap: 6px 7px; } }   /* 320 wide: the ← chip, the name and the tabs share row 1 */   /* 568 wide: the tabs name the village */
 }
 </style>
 <script src="knobs.js"></script>
@@ -133,6 +137,7 @@ body.bare #header, body.bare #stamp, body.bare #legend, body.bare #views, body.b
 <div id="labels"><svg id="leaders"><path></path><g></g></svg></div>
 <div id="bubble"></div>
 <div id="header">
+  <a id="globeLink" class="btn" href="#"><span aria-hidden="true">←</span><span class="lg"> Globe</span></a>
   <div id="brand"><span class="eco">Ecosystem </span><span class="gold">Village</span></div>
   <nav id="ecos"><a data-eco="hark">HARK</a><a data-eco="personal">Personal</a><a data-eco="misfit">Misfits</a></nav>
   <div id="crumb"></div>
@@ -1209,11 +1214,11 @@ const tagEls = new Map();
 function makeTags(update) {
   const want = new Set();
   const ensure = (id, cls, onclick) => { want.add(id); let el = tagEls.get(id); if (!el) { el = document.createElement('div'); el.className = cls; el.dataset.id = id; el.onclick = onclick; labelsEl.append(el); tagEls.set(id, el); } return el; };
-  for (const d of world.districts) if (d.kind !== 'pole') ensure('d:' + d.id, 'dtag', () => focusDistrict(d.id));
-  for (const b of world.bs.values()) if (b.form !== 'square') ensure('p:' + b.id, 'tag', () => openCard(b.id));
-  for (const h of houses.values()) ensure('p:' + h.b.id, 'tag', () => openCard(h.b.id));
-  ensure('p:square', 'tag', () => openCard('square'));
-  if (world.island) ensure('island', 'tag big', () => openCard('island'));
+  for (const d of world.districts) if (d.kind !== 'pole') ensure('d:' + d.id, 'dtag', () => focusDistrict(d.id, true));
+  for (const b of world.bs.values()) if (b.form !== 'square') ensure('p:' + b.id, 'tag', () => showPlace(b.id));
+  for (const h of houses.values()) ensure('p:' + h.b.id, 'tag', () => showPlace(h.b.id));
+  ensure('p:square', 'tag', () => showPlace('square'));
+  if (world.island) ensure('island', 'tag big', () => showPlace('island'));
   for (const [id, el] of tagEls) if (!want.has(id)) { el.remove(); tagEls.delete(id); }
 }
 const v3 = new THREE.Vector3();
@@ -1340,6 +1345,13 @@ const hud = { crumb: document.getElementById('crumb'), stats: document.getElemen
 let hudDirty = true, hudCache = '';
 document.querySelectorAll('#ecos a').forEach(a => { const e = a.dataset.eco; if (PUBLIC && e === 'misfit') return a.remove();
   const u = new URLSearchParams(); u.set('eco', e); if (PUBLIC) u.set('public', '1'); if (fixedTime) u.set('t', tparam); a.href = '?' + u; a.classList.toggle('on', e === ECO); });
+// ← Globe: back to this ecosystem's globe. Local door: the map checkout this feed serves under /map/; public door: the map's
+// public site. The HARK map has no slug, Personal is ?map=personal-systems (the map repo's maps-manifest.json); the misfit
+// island has no globe. Inside the globe's dive (this page in its iframe) it asks the globe to dive back out (its Esc).
+const globeLink = document.getElementById('globeLink');
+{ const slug = ECO === 'personal' ? '?map=personal-systems' : '', base = PUBLIC ? 'https://themaxlong.github.io/HARK-System-Map/globe.html' : '/map/globe.html';
+  if (ECO === 'misfit') globeLink.style.display = 'none'; else { globeLink.href = base + slug; globeLink.title = 'Back to the globe'; }
+  globeLink.addEventListener('click', e => { if (!window.frameElement) return; e.preventDefault(); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); }); }
 const refreshBtn = document.getElementById('refreshBtn');
 if (!(PRIVATE && ECO === 'hark')) refreshBtn.style.display = 'none';
 const fmtTime = ms => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -1461,7 +1473,7 @@ renderer.domElement.addEventListener('pointerup', e => {
   const hit = ray.intersectObjects([terrainMesh, ...districtMeshes, ...houseGroup.children], false)[0]; if (!hit) return closeCard();
   const all = [...world.bs.values(), ...[...houses.values()].map(h => h.b)];
   let best = null, bd = 1e9; for (const b of all) { const d = Math.hypot(b.x - hit.point.x, b.z - hit.point.z) / b.R; if (d < bd) { bd = d; best = b; } }
-  if (best && bd < 1.2) openCard(best.id); else if (world.island && Math.hypot(world.island.x - hit.point.x, world.island.z - hit.point.z) < world.island.R + 3) openCard('island'); else closeCard();
+  if (best && bd < 1.2) showPlace(best.id); else if (world.island && Math.hypot(world.island.x - hit.point.x, world.island.z - hit.point.z) < world.island.R + 3) showPlace('island'); else closeCard();
 });
 
 // ---------- the facility replay: the snapshot's events at their real time of day (the code side stays live) ----------
@@ -1665,11 +1677,50 @@ function draw(t) {
 const camTarget = new THREE.Vector3();
 let framed = false, focusD = null, untouched = false;   // untouched: the overview as framed, not yet panned or zoomed by hand
 function setCam(px, py, pz, tx, ty, tz) { camera.position.set(px, py, pz); camTarget.set(tx, ty, tz); if (controls) { controls.target.copy(camTarget); controls.update(); } else camera.lookAt(camTarget); }
-function focusDistrict(id) {
+// A quarter: ?district= opens framed on it (a jump, from outside the land looking in); a click on its tag flies there.
+function focusDistrict(id, fly = false) {
   const d = world?.byD.get(id); if (!d) return false; untouched = false; focusD = d.kind === 'pole' ? null : id; hudDirty = true;
+  if (fly) { flyTo(...poseFor(d.x, d.z, d.R + 4)); return true; }
   const r = d.R * 1.25 + 16, a = Math.atan2(d.x, d.z) || 0;
   setCam(d.x + Math.sin(a) * r * 0.75, r * 0.95, d.z + Math.cos(a) * r * 0.75, d.x, 0, d.z); return true;
 }
+// ---------- fly-to (Max 10/29: "fast forward or zoom across the map over to the selected label") ----------
+// One move for every door and screen: a place's tag, a house's tag, a quarter's tag, a building picked in 3D, and the
+// Overview and Street buttons all fly the camera there in one eased move, 0.9–1.4 s by distance, rising over the land on a
+// long crossing. Any hand on the controls (drag, wheel, pinch) or any key stops it where it is. Reduced motion jumps.
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
+let flight = null;
+const camTgt = () => (controls ? controls.target : camTarget);
+function flyTo(px, py, pz, tx, ty, tz) {
+  if (fixedTime || !controls || REDUCED.matches) { flight = null; setCam(px, py, pz, tx, ty, tz); return; }
+  const p0 = camera.position.clone(), t0 = camTgt().clone(), p1 = new THREE.Vector3(px, py, pz), t1 = new THREE.Vector3(tx, ty, tz);
+  const d = Math.max(p0.distanceTo(p1), t0.distanceTo(t1)); if (d < 0.05) { flight = null; return; }
+  flight = { p0, t0, p1, t1, s: performance.now(), dur: clamp(900 + d * 2.2, 900, 1400), lift: Math.min(t0.distanceTo(t1) * 0.3, 120) };
+}
+function stepFlight(now) {
+  if (!flight) return; const f = flight, k = clamp((now - f.s) / f.dur, 0, 1), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(2 - 2 * k, 3) / 2;
+  camera.position.lerpVectors(f.p0, f.p1, e); camera.position.y += Math.sin(Math.PI * e) * f.lift;
+  camTgt().lerpVectors(f.t0, f.t1, e); camTarget.copy(camTgt()); if (k >= 1) flight = null;
+}
+// where to stand to frame a circle of this radius on the ground: the current heading and (roughly) the current pitch, at
+// the distance where the circle fits the narrower side of the frame
+function poseFor(cx, cz, radius) {
+  const off = camera.position.clone().sub(camTgt()), hd = Math.hypot(off.x, off.z), heading = hd > 1e-3 ? Math.atan2(off.x, off.z) : 0;
+  const pitch = clamp(Math.atan2(off.y, Math.max(hd, 1e-3)), 0.55, 1.15), vh = camera.fov * Math.PI / 360, half = Math.min(vh, Math.atan(Math.tan(vh) * camera.aspect));
+  const dist = Math.max(14, radius / Math.tan(half) * 1.15);
+  return [cx + Math.sin(heading) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, cz + Math.cos(heading) * Math.cos(pitch) * dist, cx, 0, cz];
+}
+// a place: its own footprint and height; a facility building with its rooms round it; the offshore island whole
+function flyToPlace(id) {
+  if (!world) return; let x, z, r;
+  if (id === 'island') { if (!world.island) return; x = world.island.x; z = world.island.z; r = world.island.R + 6; }
+  else { const b = world.bs.get(id) || houses.get(id)?.b; if (!b) return; x = b.x; z = b.z; r = Math.max(b.R * 1.6, (b.top ?? 3) * 0.8) + 3;
+    if (b.p?.kind === 'building') for (const o of world.bs.values()) if (o.p?.kind === 'room' && o.p.building === id) r = Math.max(r, Math.hypot(o.x - x, o.z - z) + o.R + 4); }
+  untouched = false; focusD = null; hudDirty = true; flyTo(...poseFor(x, z, r));
+}
+const showPlace = id => { openCard(id); flyToPlace(id); };
+if (controls) controls.addEventListener('start', () => { flight = null; });
+addEventListener('keydown', () => { flight = null; });
 // Street: the square seen with the library behind it, from the first pose (nearest and lowest first) that a probe camera
 // finds clear. Every building is projected as a box (footprint × height) through the probe's full frustum: the pose is
 // rejected if the camera stands in a footprint, if a building nearer than the square covers part of the square on screen,
@@ -1749,11 +1800,12 @@ function overviewCam() {
   let lo = 10, hi = 1500; for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; if (fits(t, m)) hi = m; else lo = m; } d = hi * 1.01;
   world.fitDist = d; setCam(t.x, sp * d, t.z + cp * d, t.x, 0, t.z); untouched = true;
 }
+// Overview and Street fly too: the pose is worked out where the camera would stand, then the camera flies there from here
 window.__view = name => {
   if (!world) return;
   focusD = null; hudDirty = true;
-  if (name === 'street') return streetCam();
-  overviewCam();
+  const p = camera.position.clone(), t = camTgt().clone(), u = name === 'street' ? (streetCam(), false) : (overviewCam(), true);
+  const p1 = camera.position.clone(), t1 = camTgt().clone(); setCam(p.x, p.y, p.z, t.x, t.y, t.z); flyTo(p1.x, p1.y, p1.z, t1.x, t1.y, t1.z); untouched = u;
 };
 function frameStart() { framed = true; layoutPhone(); overviewCam(); const dq = q.get('district'); if (dq) focusDistrict(dq); }
 // the overview distance (the zoom LOD's yardstick) for the current size, without moving the camera
@@ -1786,6 +1838,9 @@ window.__spread = () => world && world.districts.map(d => [d.id, +(Math.hypot(d.
 window.__frame = () => { if (!world) return null; let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; camera.updateMatrixWorld();
   for (const p of fitPoints()) { const s = project(p.x, p.y, p.z); x0 = Math.min(x0, s.x); x1 = Math.max(x1, s.x); y0 = Math.min(y0, s.y); y1 = Math.max(y1, s.y); }
   return { phone: PHONE, W, H, box: [x0, y0, x1, y1].map(Math.round), free: freeArea().safe.map(Math.round) }; };
+window.__ringBox = (x, z, r) => { let b = [1e9, 1e9, -1e9, -1e9]; for (let i = 0; i < 16; i++) { const a = i / 16 * tau, q = project(x + Math.cos(a) * r, 0, z + Math.sin(a) * r); b = [Math.min(b[0], q.x), Math.min(b[1], q.y), Math.max(b[2], q.x), Math.max(b[3], q.y)]; } return b.map(Math.round); };
+window.__districtXZR = id => { const d = world?.byD.get(id); return d ? [+d.x.toFixed(2), +d.z.toFixed(2), +d.R.toFixed(2)] : null; };
+window.__placeXZ = id => { const b = id === 'island' ? world?.island : world?.bs.get(id) || houses.get(id)?.b; return b ? [+b.x.toFixed(2), +b.z.toFixed(2)] : null; };   // for the fly-to check
 // (with no id: the first building whose ground point is bare canvas on screen, not under a tag or a panel)
 window.__tapPoint = id => { const ids = id ? [id] : [...(world?.bs.keys() || []), ...houses.keys()].filter(k => k !== 'square');
   for (const k of ids) { const b = world?.bs.get(k) || houses.get(k)?.b; if (!b) continue; const s = project(b.x, 0.5, b.z), x = Math.round(s.x), y = Math.round(s.y);
@@ -1794,7 +1849,7 @@ window.__tapPoint = id => { const ids = id ? [id] : [...(world?.bs.keys() || [])
   return null; };
 window.__villageState = () => ({ source, eco: ECO, frames, lod, pollMs: POLL_MS, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, places: world ? world.bs.size + houses.size : 0,
   working: lastState.working, idle: lastState.idle, walking: lastState.walking, replay: lastState.replay, payloadWorking: lastState.payloadWorking,
-  cam: camera.position.toArray().map(v => +v.toFixed(2)), untouched,
+  cam: camera.position.toArray().map(v => +v.toFixed(2)), target: camTgt().toArray().map(v => +v.toFixed(2)), flying: !!flight, untouched,
   district: focusD, zoom: world ? camera.position.distanceTo(controls ? controls.target : camTarget) / (world.fitDist || 200) : null });
 window.renderAt = t => { if (fixedTime) { t = ((t % P) + P) % P; orbitCam(t); } draw(t); };
 
@@ -1830,7 +1885,7 @@ else {
   setInterval(poll, POLL_MS); if (!PUBLIC) setInterval(pollMisfit, 30000);
   window.__ready = true;
   const t0 = performance.now();
-  (function loop() { const t = (performance.now() - t0) / 1000; lastT = t; controls.update(); draw(t); requestAnimationFrame(loop); })();
+  (function loop() { const now = performance.now(), t = (now - t0) / 1000; lastT = t; stepFlight(now); controls.update(); draw(t); requestAnimationFrame(loop); })();
   // a resize re-sizes the canvas and re-measures the overview; it never reloads (a dragged window edge fires dozens)
   // a phone (or crossing into one): the tags re-measure, and at the overview a rotation frames the whole island again
   // iOS reports a stale height in the first frame after a rotation: the size step runs again 250 ms later, and on the visual
