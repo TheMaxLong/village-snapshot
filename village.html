@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Ecosystem village</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>
 :root { --ink: #0a0a0a; --paper: #f2f0ea; --line: rgba(255,255,255,.1); --dim: rgba(255,255,255,.52); --faint: rgba(255,255,255,.3);
   --gold: linear-gradient(100deg,#6f5214 0%,#c99a35 22%,#f6dc8a 42%,#fff3c4 50%,#d8ad4e 62%,#8a6420 100%); --gold-solid: #d6b057; --red: #e5322d;
@@ -69,6 +69,49 @@ canvas { display: block; position: absolute; left: 0; top: 0; }
 #bubble .who { font: 700 8.5px Menlo, monospace; letter-spacing: .14em; text-transform: uppercase; color: #8a6420; display: block; margin-bottom: 2px; }
 body.minimal #legend, body.minimal #views, body.minimal #stats { display: none; }
 body.bare #header, body.bare #stamp, body.bare #legend, body.bare #views, body.bare #labels, body.bare #bubble, body.bare #card { display: none !important; }
+/* phone-only pieces: never drawn on the desktop */
+#stamp .sh, #legend .lx, #scrim, .stat .sh { display: none; }
+#hrow2 { display: contents; }
+/* ---------- on a phone (Max 10/29): the same page, one layout that adapts. The query is PHONE_Q in the script: keep them equal. ---------- */
+@media (max-width: 600px), (pointer: coarse) and (max-width: 900px) {
+  html, body { height: 100dvh; overscroll-behavior: none; }
+  #header { height: auto; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: calc(8px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 10px calc(12px + env(safe-area-inset-left));
+    background: linear-gradient(180deg, rgba(10,10,10,.96) 78%, rgba(10,10,10,0)); }
+  #brand .eco { display: none; }
+  #brand { font-size: 12px; letter-spacing: .32em; }
+  #ecos { margin-left: auto; }
+  #ecos a { font-size: 10px; padding: 9px 9px; }
+  #crumb { display: none; }
+  #hrow2 { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; min-width: 0; }
+  #stats { flex: 1 1 auto; gap: 0; justify-content: space-between; min-width: 0; }
+  .stat { text-align: left; } .stat b { font-size: 15px; } .stat span { font-size: 7.5px; letter-spacing: .1em; }
+  .stat .lg { display: none; } .stat .sh { display: inline; }
+  #refreshBtn { min-height: 36px; padding: 0 12px; }
+  #refreshBtn .lg { display: none; }
+  #stamp { left: calc(12px + env(safe-area-inset-left)); right: auto; max-width: calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)); top: var(--hdr, 92px);
+    height: 22px; padding: 4px 8px; font-size: 9px; line-height: 12px; letter-spacing: .1em; white-space: nowrap; overflow: hidden; display: block; text-overflow: ellipsis; }
+  #stamp .lg { display: none; } #stamp .sh { display: inline; }
+  #views { right: calc(12px + env(safe-area-inset-right)); bottom: calc(12px + env(safe-area-inset-bottom)); gap: 8px; }
+  #views .btn, #legend:not(.open) { min-height: 44px; }
+  #views .btn { padding: 0 14px; font-size: 10px; }
+  #legend { left: calc(12px + env(safe-area-inset-left)); bottom: calc(12px + env(safe-area-inset-bottom)); max-width: none; }
+  #legend:not(.open) { display: flex; align-items: center; padding: 0 14px; cursor: pointer; border-radius: 6px; }
+  #legend:not(.open) .k { margin: 0; color: rgba(255,255,255,.82); font-size: 10px; letter-spacing: .1em; }
+  #legend:not(.open) .lt { display: none; }
+  #legend.open { left: 0; right: 0; bottom: 0; z-index: 8; border-radius: 14px 14px 0 0; border-bottom: 0; font-size: 14px; line-height: 1.55; max-height: 70dvh; overflow: auto;
+    padding: 18px calc(20px + env(safe-area-inset-right)) calc(22px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left)); color: rgba(255,255,255,.8); }
+  #legend.open .k { margin-bottom: 10px; font-size: 10px; }
+  #legend.open .lx, #card .x { display: block; position: absolute; right: 4px; top: 2px; width: 44px; height: 44px; padding: 0; background: none; border: 0; color: var(--dim); font-size: 24px; line-height: 44px; text-align: center; cursor: pointer; }
+  #scrim.open { display: block; position: absolute; inset: 0; z-index: 7; background: rgba(0,0,0,.45); }
+  #card { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 60dvh; border-radius: 14px 14px 0 0; border-bottom: 0; z-index: 7; overscroll-behavior: contain;
+    padding: 16px calc(18px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left)); }
+  #card h2 { margin-right: 40px; }
+  #card .btn { min-height: 40px; }
+  .tag { font-size: 11px; padding: 3px 4px 2px; } .tag.big { font-size: 11.5px; }
+  .dtag { font-size: 11.5px; letter-spacing: .16em; padding: 4px 5px 3px 7px; outline-offset: 1px; }
+  .dtag small { margin-top: 3px; font-size: 9.5px; letter-spacing: .1em; }
+  .tag::after, .dtag::after { content: ""; position: absolute; inset: -6px; }
+}
 </style>
 <script src="knobs.js"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
@@ -76,14 +119,15 @@ body.bare #header, body.bare #stamp, body.bare #legend, body.bare #views, body.b
 <div id="labels"><svg id="leaders"><path></path><g></g></svg></div>
 <div id="bubble"></div>
 <div id="header">
-  <div id="brand">Ecosystem <span class="gold">Village</span></div>
+  <div id="brand"><span class="eco">Ecosystem </span><span class="gold">Village</span></div>
   <nav id="ecos"><a data-eco="hark">HARK</a><a data-eco="personal">Personal</a><a data-eco="misfit">Misfits</a></nav>
   <div id="crumb"></div>
-  <div id="stats"></div>
-  <button id="refreshBtn" class="btn" type="button">Refresh now</button>
+  <div id="hrow2"><div id="stats"></div>
+  <button id="refreshBtn" class="btn" type="button">Refresh<span class="lg"> now</span></button></div>
 </div>
 <div id="stamp"></div>
 <div id="card" class="panel"></div>
+<div id="scrim"></div>
 <div id="legend" class="panel"></div>
 <div id="views"><button class="btn" data-view="overview" type="button">Overview</button><button class="btn" data-view="street" type="button">Street</button></div>
 <script type="module">
@@ -93,7 +137,7 @@ body.bare #header, body.bare #stamp, body.bare #legend, body.bare #views, body.b
 // plain names everywhere (Max 10/29), every IP, URL, domain and port already scrubbed by the feed. ?public=1 is the
 // public village on GitHub Pages (lab/ecosystem/publish.mjs): it reads ./<eco>.json beside the page (hark or personal; the
 // misfit island is a count only), replays the snapshot's last 30 min of events in a loop, says "as of" and "village
-// sleeping" once the snapshot is 30 min old, and has no Refresh, no sort and no Misfits tab. ?t= draws seeded demo data (no request at all) for exports and the
+// sleeping" once the snapshot is 50 min old, and has no Refresh, no sort and no Misfits tab. ?t= draws seeded demo data (no request at all) for exports and the
 // Creator checks.
 // Page contract: renderAt(t) deterministic in demo, seam t=0 == t=P, ?w=&h= sizes, Look / Layout knobs.
 import * as THREE from 'three';
@@ -105,7 +149,13 @@ const PUBLIC = q.get('public') === '1';
 // the public door publishes no misfit village (its count rides on the others): ?eco=misfit there opens HARK
 const ECO = ['hark', 'personal', 'misfit'].includes(q.get('eco')) && !(PUBLIC && q.get('eco') === 'misfit') ? q.get('eco') : 'hark';
 const tparam = q.get('t'), fixedTime = tparam != null;
-let W = +q.get('w') || innerWidth, H = +q.get('h') || innerHeight;
+// a phone (Max 10/29): the same query as the CSS block's @media — keep the two equal. Re-read on every resize (a rotation
+// can cross it). The size is the visible one: a mobile browser grows innerWidth to fit anything wider than the screen, and
+// the canvas would then keep it grown, so the smaller of inner and client is the screen.
+const PHONE_Q = matchMedia('(max-width: 600px), (pointer: coarse) and (max-width: 900px)');
+let PHONE = PHONE_Q.matches;
+const viewW = () => Math.min(innerWidth, document.documentElement.clientWidth || innerWidth), viewH = () => Math.min(innerHeight, document.documentElement.clientHeight || innerHeight);
+let W = +q.get('w') || viewW(), H = +q.get('h') || viewH();
 const P = 40; window.__period = P; window.__jitter = () => {};
 // culture follows the spec's tier table: Greco-Roman for Personal and for HARK's code quarters, Mesopotamian only for the
 // HARK facility quarter, mismatched huts on the misfit island
@@ -138,7 +188,7 @@ const nz = makeNoise(ECO === 'hark' ? 11 : ECO === 'personal' ? 23 : 37);
 // ---------- renderer, camera, lights ----------
 const INK = new THREE.Color('#0a0a0a');
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(fixedTime ? 1 : Math.min(devicePixelRatio, 1.5)); renderer.setSize(W, H, false);
+renderer.setPixelRatio(fixedTime ? 1 : Math.min(devicePixelRatio, PHONE ? 2 : 1.5));   // a phone's 3x screen draws at 2x: 9 px of fill per css px would be 4 there renderer.setSize(W, H, false);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NoToneMapping;
 document.body.prepend(renderer.domElement);
@@ -148,7 +198,7 @@ const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.from
 const camera = new THREE.PerspectiveCamera(36, W / H, 0.5, 2000);
 const hemi = new THREE.HemisphereLight('#e6e9f0', '#2a2622', 1.1); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff4e2', 2.5); sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.05; scene.add(sun, sun.target);
+sun.shadow.mapSize.set(PHONE ? 2048 : 4096, PHONE ? 2048 : 4096); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.05; scene.add(sun, sun.target);
 const controls = fixedTime ? null : new MapControls(camera, renderer.domElement);
 if (controls) Object.assign(controls, { enableDamping: true, dampingFactor: 0.12, minDistance: 6, maxDistance: 1500, maxPolarAngle: 1.32, zoomToCursor: true, screenSpacePanning: false });
 
@@ -1125,7 +1175,7 @@ async function poll() {
 }
 async function pollMisfit() {
   if (ECO === 'misfit' || PUBLIC) return;
-  try { const r = await fetch(PUBLIC ? '/api/public/eco/misfit' : '/api/eco/misfit', { cache: 'no-store' }); if (!r.ok) throw 0; const d = await r.json();
+  try { const r = await fetch('/api/eco/misfit', { cache: 'no-store' }); if (!r.ok) throw 0; const d = await r.json();
     misfitHuts = (d.places || []).filter(p => p.kind === 'hut').map(p => ({ id: p.id, name: p.name }));
     misfitCount = (d.counts?.sessions || 0) + misfitHuts.length; } catch { misfitCount = null; misfitHuts = []; }
   if (cardSel === 'island') refreshCard();
@@ -1151,7 +1201,8 @@ function project(x, y, z) { v3.set(x, y, z).project(camera); return { x: (v3.x +
 let lod = 'overview', shadowDirty = true;
 function lodNow() {
   const target = controls ? controls.target : camTarget, k = camera.position.distanceTo(target) / (world.fitDist || 200);
-  return k >= 0.55 ? 'overview' : k >= 0.22 ? 'mid' : 'street';
+  // a phone's screen is a third of the desktop's: names come in a step later as you zoom (the overview names quarters only)
+  return PHONE ? (k >= 0.5 ? 'overview' : k >= 0.18 ? 'mid' : 'street') : k >= 0.55 ? 'overview' : k >= 0.22 ? 'mid' : 'street';
 }
 const leaderPath = () => document.querySelector('#leaders path'), leaderDots = () => document.querySelector('#leaders g');
 const overlap = (a, b) => Math.max(0, Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]));
@@ -1172,22 +1223,24 @@ function placeTags(st) {
     const name = model.districts.find(x => x.id === d.id)?.name || (d.kind === 'facility' ? 'Facility' : d.id);
     const n = d.items.filter(b => b.form !== 'square').length, k = [...houses.values()].filter(h => (world.byD.get(h.b.p.district) || world.pole) === d).length;
     const html = `${esc(name)}<small>${n} place${n === 1 ? '' : 's'}${k ? ` · ${k} session${k === 1 ? '' : 's'}` : ''}</small>`;
-    items.push({ el, html, d, pri: -10, must: true, district: true }); }
+    // on a phone the bigger tag is placed first and a smaller one that would overlap it hides
+    items.push({ el, html, d, pri: PHONE ? -10 - (el.__w * el.__h || 0) / 1e6 : -10, must: true, district: true }); }
   for (const b of all) {
     const el = tagEls.get('p:' + b.id); if (!el) continue;
     const p = b.p, active = !!st.activePlaces.has(b.id), t = p._tier || 1;
     const big = b.form === 'alexandria' || b.form === 'ashurbanipal' || b.form === 'ziggurat' || b.form === 'colosseum' || t >= 5;
-    const show = lod === 'street' || (lod === 'mid' ? t >= 3 || big || active || p.kind === 'house' || p.kind === 'square' : t >= 4 || big);
+    const show = lod === 'street' || (lod === 'mid' ? t >= 3 || big || active || p.kind === 'house' || p.kind === 'square' : !PHONE && (t >= 4 || big));   // a phone's overview names the quarters only
     const name = p.kind === 'square' ? 'the square' : p.name;
     const html = esc(name) + (p.kind === 'house' && st.byHome.get(b.id) ? `<span class="n">${st.byHome.get(b.id)}</span>` : '');
     items.push({ el, html, b, show, must: big, cls: 'tag' + (big ? ' big' : '') + (active ? ' act' : ''), pos: [b.x, (b.top ?? 3) + 0.3, b.z], pri: (big ? 0 : 6 - t) - (active ? 3 : 0) });
   }
-  if (world.island) items.push({ el: tagEls.get('island'), html: `Island of Misfit Toys<span class="n">${misfitCount == null ? '·' : misfitCount}</span>`, cls: 'tag big', pos: [world.island.x, 4, world.island.z], pri: 1, must: true, show: true });
+  if (world.island) items.push({ el: tagEls.get('island'), html: `Island of Misfit Toys<span class="n">${misfitCount == null ? '·' : misfitCount}</span>`, cls: 'tag big', pos: [world.island.x, 4, world.island.z], pri: 1, must: true, show: !PHONE || lod !== 'overview' });
   items.sort((a, b) => a.pri - b.pri);
   const placed = [], lines = [];
   // the HUD's own boxes (legend, view buttons, card) are off limits too
   const huds = K.layout === 'scene only' ? [] : ['legend', 'views', 'card'].map(id => document.getElementById(id).getBoundingClientRect()).filter(r => r.width).map(r => [r.left - 4, r.top - 4, r.width + 8, r.height + 8]);
-  const free = r => r[1] > 80 && r[0] > 4 && r[0] + r[2] < W - 4 && r[1] + r[3] < H - 4 && !huds.some(h => overlap(r, h) > 0);
+  const top = PHONE ? phoneTop() : 80;   // a phone's header is two rows and the stamp sits under it
+  const free = r => r[1] > top && r[0] > 4 && r[0] + r[2] < W - 4 && r[1] + r[3] < H - 4 && !huds.some(h => overlap(r, h) > 0);
   for (const it of items) {
     // every tag carries the current payload's name, shown or not
     if (it.el.__html !== it.html) { it.el.innerHTML = it.html; it.el.__html = it.html; it.el.__w = 0; }
@@ -1213,10 +1266,13 @@ function placeTags(st) {
       const r = [rx, ry, w, h]; if (!free(r)) continue;
       const pad = it.district ? 10 : 3;   // quarter names keep a wider berth from every other tag
       let cost = placed.reduce((c, q) => c + overlap([r[0] - pad, r[1] - pad * 0.7, r[2] + 2 * pad, r[3] + 1.4 * pad], q) * 4, 0);
+      const clash = PHONE && placed.some(q => overlap(r, q) > 0);   // a phone: a spot on another tag is never taken
       for (const [id, f] of obstacles) if (id !== own) cost += overlap(r, f);
       if (it.district) for (const qr of qrects) cost += overlap(r, qr) * 0.5;
+      if (clash) continue;
       if (!best || cost < best.cost) best = { r, cost }; if (cost === 0) break;
     }
+    // a phone: a must tag (quarter, grand building) may sit on ground or a building, never on another tag; with no free spot it hides
     if (!best || (best.cost > 0 && !it.must)) { it.el.classList.add('hid'); continue; }
     placed.push(best.r);
     it.el.style.transform = `translate(${Math.round(best.r[0])}px, ${Math.round(best.r[1])}px)`;   // whole pixels: a fractional box edge rasterises differently by history
@@ -1237,12 +1293,13 @@ const refreshBtn = document.getElementById('refreshBtn');
 if (!(PRIVATE && ECO === 'hark')) refreshBtn.style.display = 'none';
 const fmtTime = ms => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 const fmtDay = ms => new Date(ms).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-let refreshNote = '';
+let refreshNote = '', refreshShort = '';
 refreshBtn.addEventListener('click', async () => {
-  refreshBtn.disabled = true; refreshNote = 'asking…'; hudDirty = true;
+  refreshBtn.disabled = true; refreshNote = refreshShort = 'asking…'; hudDirty = true;
   try { const r = await fetch('/api/facility/refresh', { method: 'POST' }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status);
     refreshNote = j.waitUntil ? `queued · reads at ${fmtTime(Date.parse(j.waitUntil))}, after the irrigation window` : j.cached ? 'read under 5 min ago · nothing new to fetch' : 'read done';
-  } catch (e) { refreshNote = 'refresh failed: ' + e.message; }
+    refreshShort = j.waitUntil ? `queued ${fmtTime(Date.parse(j.waitUntil))}` : j.cached ? 'nothing new' : 'read done';
+  } catch (e) { refreshNote = 'refresh failed: ' + e.message; refreshShort = 'refresh failed'; }
   refreshBtn.disabled = false; hudDirty = true; poll();
 });
 const ECO_TITLE = { hark: 'HARK', personal: 'Personal', misfit: 'Island of Misfit Toys' };
@@ -1250,30 +1307,47 @@ function drawHud(st) {
   if (!fixedTime && !hudDirty && frames % 30) return; hudDirty = false;
   const c = model?.counts || {}, demo = source === 'demo';
   const crumb = `${ECO_TITLE[ECO]}<span class="sep">›</span>Village${focusD ? `<span class="sep">›</span>${esc(model.districts.find(x => x.id === focusD)?.name || '')}` : ''}`;
-  const stat = (v, k) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`;
-  const stats = stat(c.sessions ?? 0, 'sessions') + stat(st.working, 'at work') + stat(st.walking, 'on the roads') + stat(model?.places?.length ?? 0, 'places');
+  // each label twice: the desktop's words, and a phone's shorter one (CSS shows one)
+  const stat = (v, k, sh = k) => `<div class="stat"><b>${v}</b><span>${sh === k ? k : `<span class="lg">${k}</span><span class="sh">${sh}</span>`}</span></div>`;
+  const stats = stat(c.sessions ?? 0, 'sessions') + stat(st.working, 'at work') + stat(st.walking, 'on the roads', 'walking') + stat(model?.places?.length ?? 0, 'places');
   const f = model?.facility;
   let stamp = demo ? `<span>demo · seeded data${fixedTime ? '' : ' (no feed)'}</span>` : `<span>feed <b>${feedState.ok ? (PUBLIC ? 'public snapshot' : 'live · local') : 'lost'}</b></span>`;
   if (PUBLIC && !demo && model?.asOf) stamp += `<span>as of <b>${fmtDay(Date.parse(model.asOf))} ${fmtTime(Date.parse(model.asOf))}</b>${sleeping() ? ' · village sleeping' : ''}</span>`;
   if (ECO === 'hark' && f) stamp += f.demo ? '<span>facility data as of <b>6:10 AM</b> · replaying its events at their times</span>'
     : `<span>facility data as of <b>${f.asOf ? fmtDay(Date.parse(f.asOf)) + ' ' + fmtTime(Date.parse(f.asOf)) : 'never read'}</b>${f.stale ? ' (stale)' : ''} · replaying its events at their times</span>`;
   stamp += `<span id="refreshNote">${esc(refreshNote)}</span>`;
+  // a phone's stamp: one short line (the long spans above are hidden there, this one on the desktop)
+  const wk = ms => new Date(ms).toLocaleDateString([], { weekday: 'short' }) + ' ' + fmtTime(ms);
+  let sh = demo ? 'demo' : !feedState.ok ? 'feed lost' : PUBLIC ? (sleeping() ? 'village sleeping' : model?.asOf ? `snapshot <b>${fmtTime(Date.parse(model.asOf))}</b>` : 'snapshot') : 'live';
+  if (ECO === 'hark' && f && !(PUBLIC && sleeping())) sh += ` · facility <b>${f.demo ? '6:10 AM' : f.asOf ? wk(Date.parse(f.asOf)) : 'never read'}</b>${f.stale ? ' stale' : ''}`;
+  if (refreshShort) sh += ' · ' + esc(refreshShort);
+  stamp = stamp.replace(/<span(?= |>)/g, '<span class="lg"') + `<span class="sh">${sh}</span>`;
   const html = crumb + '|' + stats + '|' + stamp;
   if (html === hudCache) return; hudCache = html;
   hud.crumb.innerHTML = crumb; hud.stats.innerHTML = stats; hud.stamp.innerHTML = stamp;
 }
 function drawLegend() {
   // plain English (Max 10/29): no architecture terms, no naming notes
-  hud.legend.innerHTML = `<span class="k">How to read it</span>` + (ECO === 'misfit'
+  // the text in its own span: a phone folds the legend to its title (a chip) and opens it as a sheet with a close button
+  hud.legend.innerHTML = `<button class="lx" type="button" aria-label="close">×</button><span class="k">How to read it</span><span class="lt">` + (ECO === 'misfit'
     ? `Sessions the sorter couldn't place yet wait here. Each hut is a folder: open it and choose HARK or Personal, and every session from that folder follows.`
     : `Each building is a project or system — the more things it connects to, the bigger it is. Each person walking a road is something that really just happened: a file edited, a command run, a commit. ` +
       `People in gold hats are Claude sessions working right now; they only move while a session is active. Scaffolding means that place was worked on in the last 3 minutes. ` +
       `The people in the centre square read out what happened today, and the library keeps the daily log.` +
-      (ECO === 'hark' ? ` The walled city is the facility: fields are grow rooms, the big halls are the buildings, and the tower is the main computer. Fields light up and beacons glow as the day's watering and readings replay.` : ''));
+      (ECO === 'hark' ? ` The walled city is the facility: fields are grow rooms, the big halls are the buildings, and the tower is the main computer. Fields light up and beacons glow as the day's watering and readings replay.` : '')) + '</span>';
 }
+// a phone: the legend chip opens a bottom sheet; its × or a tap outside it (the scrim) closes it. The desktop never folds it.
+const scrimEl = document.getElementById('scrim');
+function legendOpen(on) { hud.legend.classList.toggle('open', on); scrimEl.classList.toggle('open', on); if (on) closeCard(); }
+hud.legend.addEventListener('click', e => { if (!PHONE) return; if (e.target.closest('.lx')) legendOpen(false); else if (!hud.legend.classList.contains('open')) legendOpen(true); });
+scrimEl.addEventListener('click', () => legendOpen(false));
+// a phone's header is two rows of any height: the stamp sits under it (--hdr), and the free area starts under the stamp
+const headerEl = document.getElementById('header');
+function layoutPhone() { if (PHONE) document.body.style.setProperty('--hdr', Math.round(headerEl.getBoundingClientRect().bottom) + 'px'); }
+function phoneTop() { const r = hud.stamp.getBoundingClientRect(); return Math.max(r.width ? r.bottom : 0, headerEl.getBoundingClientRect().bottom) + 6; }
 const cardEl = document.getElementById('card');
 let cardSel = null;
-function openCard(id) { cardSel = id; refreshCard(); }
+function openCard(id) { cardSel = id; if (hud.legend.classList.contains('open')) legendOpen(false); refreshCard(); }
 function closeCard() { cardSel = null; cardEl.classList.remove('open'); }
 const fmtBytes = b => b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b >= 1e6 ? Math.round(b / 1e6) + ' MB' : b >= 1e3 ? Math.round(b / 1e3) + ' KB' : (b || 0) + ' B';
 function refreshCard() {
@@ -1341,8 +1415,10 @@ function replayNow(nowMs) {
 
 // ---------- the public snapshot: its last 30 min of events, replayed in a 30-min loop on the viewer's clock ----------
 // (one walker per event: tool and helper work from a house to its place, a commit's gold tablet to the square; the
-// facility's own events replay by time of day above). Past 30 min without a new snapshot the village sleeps.
-const LOOP = 30 * 60e3, SLEEP_MS = 30 * 60e3;
+// facility's own events replay by time of day above). Past 50 min without a new snapshot the village sleeps.
+// SLEEP_MS 50 min: an idle, awake Mac republishes every ≥25 min (heartbeat, landing on a 10-min run ≈ 30), plus Pages build
+// (~1 min), edge cache (≤10 min) and the 2-min poll ≈ 43 min worst case — so only a Mac that is really off reads as asleep
+const LOOP = 30 * 60e3, SLEEP_MS = 50 * 60e3;
 const sleeping = () => PUBLIC && !(Date.now() - Date.parse(model?.asOf) < SLEEP_MS);
 function publicReplay(nowMs) {
   const end = Date.parse(model?.asOf), out = [];
@@ -1574,13 +1650,26 @@ function streetCam() {
 }
 // Overview: everything (every quarter's rim, the facility wall, the island, the tall tops) inside the free part of the
 // screen, whatever the aspect: below the header and stamp, clear of the legend and the view buttons.
-function overviewCam() {
+// The points that must be on screen, and the free part of the screen. A phone adds the coast (its whole island is the
+// picture there) and its free area is the band between the stamp and the bottom bar (the legend chip and the view buttons).
+function fitPoints() {
   const pts = [], V = THREE.Vector3;
   for (const d of world.districts) for (let i = 0; i < 20; i++) { const a = i / 20 * tau; pts.push(new V(d.x + Math.cos(a) * (d.R + 2), 0, d.z + Math.sin(a) * (d.R + 2))); }
   for (const b of world.bs.values()) if (b.top > 5) pts.push(new V(b.x, b.top, b.z));
   if (world.island) for (let i = 0; i < 12; i++) { const a = i / 12 * tau; pts.push(new V(world.island.x + Math.cos(a) * (world.island.R + 4), 0, world.island.z + Math.sin(a) * (world.island.R + 4)), new V(world.island.x, 7, world.island.z)); }
-  const zones = K.layout === 'full hud' ? ['legend', 'views'].map(id => document.getElementById(id).getBoundingClientRect()).filter(r => r.width).map(r => [r.left - 8, r.top - 8, r.right + 8, r.bottom + 8]) : [];
-  const safe = [16, K.layout === 'scene only' ? 16 : 104, W - 16, H - 16], pitch = 0.95, sp = Math.sin(pitch), cp = Math.cos(pitch), v = new V();
+  if (PHONE) for (let i = 0; i < 32; i++) { const a = i / 32 * tau; pts.push(new V(Math.cos(a) * (world.landR + 4), 0, Math.sin(a) * (world.landR + 4))); }
+  return pts;
+}
+function freeArea() {
+  if (!PHONE || K.layout === 'scene only') return { zones: K.layout === 'full hud' ? ['legend', 'views'].map(id => document.getElementById(id).getBoundingClientRect()).filter(r => r.width).map(r => [r.left - 8, r.top - 8, r.right + 8, r.bottom + 8]) : [],
+    safe: [16, K.layout === 'scene only' ? 16 : 104, W - 16, H - 16] };
+  layoutPhone();
+  const bars = ['legend', 'views'].map(id => document.getElementById(id).getBoundingClientRect()).filter(r => r.width && r.top > H / 2);
+  return { zones: [], safe: [10, phoneTop() + 4, W - 10, Math.min(H - 10, ...bars.map(r => r.top - 8))] };
+}
+function overviewCam() {
+  const pts = fitPoints(), V = THREE.Vector3;
+  const { zones, safe } = freeArea(), pitch = 0.95, sp = Math.sin(pitch), cp = Math.cos(pitch), v = new V();
   const pose = (t, d) => { camera.position.set(t.x, sp * d, t.z + cp * d); camera.lookAt(t); camera.updateMatrixWorld(); };
   const screen = p => { v.copy(p).project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H, v.z]; };
   const fits = (t, d) => { pose(t, d); for (const p of pts) { const [x, y, z] = screen(p);
@@ -1601,16 +1690,37 @@ window.__view = name => {
   if (name === 'street') return streetCam();
   overviewCam();
 };
-function frameStart() { framed = true; overviewCam(); const dq = q.get('district'); if (dq) focusDistrict(dq); }
+function frameStart() { framed = true; layoutPhone(); overviewCam(); const dq = q.get('district'); if (dq) focusDistrict(dq); }
 // the overview distance (the zoom LOD's yardstick) for the current size, without moving the camera
 function refit() { if (!world) return; const p = camera.position.clone(), t = (controls ? controls.target : camTarget).clone(); overviewCam(); setCam(p.x, p.y, p.z, t.x, t.y, t.z); }
 function orbitCam(t) {
-  const dq = q.get('district'), d = dq && world.byD.get(dq), cx = d ? d.x : 0, cz = d ? d.z : 0, r = d ? d.R * 1.3 + 16 : world.landR * 1.15 + 18, a = tau * t / P + 0.6;
+  const dq = q.get('district'), d = dq && world.byD.get(dq), a = tau * t / P + 0.6;
+  let cx = d ? d.x : 0, cz = d ? d.z : 0, r = d ? d.R * 1.3 + 16 : world.landR * 1.15 + 18;
+  if (PHONE && !d) ({ cx, cz, r } = phoneOrbit());
   camera.position.set(cx + Math.sin(a) * r, r * 0.92, cz + Math.cos(a) * r); camTarget.set(cx, -2, cz); camera.lookAt(camTarget);
+}
+// a phone's demo orbit: the radius at which the whole island stays inside the free area at EVERY angle of the turn
+// (24 angles, binary search), round the middle of the fit points. A pure function of the size: renderAt stays deterministic.
+let orbitMemo = null;
+function phoneOrbit() {
+  const key = W + 'x' + H + '|' + staticKey + '|' + K.layout; if (orbitMemo?.key === key) return orbitMemo;
+  const pts = fitPoints(), { safe } = freeArea(), v = new THREE.Vector3();
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  const fits = r => { for (let i = 0; i < 24; i++) { const a = i / 24 * tau;
+    camera.position.set(cx + Math.sin(a) * r, r * 0.92, cz + Math.cos(a) * r); camera.lookAt(cx, -2, cz); camera.updateMatrixWorld();
+    for (const p of pts) { v.copy(p).project(camera); const x = (v.x + 1) / 2 * W, y = (1 - v.y) / 2 * H; if (v.z > 1 || x < safe[0] || x > safe[2] || y < safe[1] || y > safe[3]) return false; } } return true; };
+  let lo = 10, hi = 3000; for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; if (fits(m)) hi = m; else lo = m; }
+  return (orbitMemo = { key, cx, cz, r: hi * 1.01 });
 }
 document.getElementById('views').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) window.__view(b.dataset.view); });
 window.__open = id => { if (id === 'island' || world?.bs.has(id) || houses.has(id)) { openCard(id); return true; } return false; };
 window.__spread = () => world && world.districts.map(d => [d.id, +(Math.hypot(d.x, d.z) / world.landR).toFixed(2), +d.R.toFixed(0)]);
+// for the phone checks: the fit points' box on screen now, the free area, and a building's ground point on screen (to tap)
+window.__frame = () => { if (!world) return null; let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; camera.updateMatrixWorld();
+  for (const p of fitPoints()) { const s = project(p.x, p.y, p.z); x0 = Math.min(x0, s.x); x1 = Math.max(x1, s.x); y0 = Math.min(y0, s.y); y1 = Math.max(y1, s.y); }
+  return { phone: PHONE, W, H, box: [x0, y0, x1, y1].map(Math.round), free: freeArea().safe.map(Math.round) }; };
+window.__tapPoint = id => { const b = world?.bs.get(id) || houses.get(id)?.b; if (!b) return null; const s = project(b.x, 0.5, b.z); return s.ok ? [Math.round(s.x), Math.round(s.y)] : null; };
 window.__villageState = () => ({ source, eco: ECO, frames, lod, pollMs: POLL_MS, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, places: world ? world.bs.size + houses.size : 0,
   working: lastState.working, idle: lastState.idle, walking: lastState.walking, replay: lastState.replay, payloadWorking: lastState.payloadWorking,
   district: focusD, zoom: world ? camera.position.distanceTo(controls ? controls.target : camTarget) / (world.fitDist || 200) : null });
@@ -1650,9 +1760,12 @@ else {
   const t0 = performance.now();
   (function loop() { const t = (performance.now() - t0) / 1000; lastT = t; controls.update(); draw(t); requestAnimationFrame(loop); })();
   // a resize re-sizes the canvas and re-measures the overview; it never reloads (a dragged window edge fires dozens)
+  // a phone (or crossing into one): the tags re-measure, and at the overview a rotation frames the whole island again
   let rz = 0; addEventListener('resize', () => { if (q.get('w') || q.get('h')) return; cancelAnimationFrame(rz); rz = requestAnimationFrame(() => {
-    W = innerWidth; H = innerHeight; renderer.setSize(W, H, false); renderer.domElement.style.width = W + 'px'; renderer.domElement.style.height = H + 'px';
-    camera.aspect = W / H; camera.updateProjectionMatrix(); refit(); }); });
+    const was = PHONE; PHONE = PHONE_Q.matches; if (was !== PHONE) { for (const el of tagEls.values()) el.__w = 0; hudDirty = true; if (!PHONE) legendOpen(false); }
+    W = viewW(); H = viewH(); renderer.setSize(W, H, false); renderer.domElement.style.width = W + 'px'; renderer.domElement.style.height = H + 'px';
+    camera.aspect = W / H; camera.updateProjectionMatrix(); layoutPhone();
+    if (PHONE && lod === 'overview' && !focusD) overviewCam(); else refit(); }); });
 }
 </script>
 </body></html>
