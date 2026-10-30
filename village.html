@@ -231,6 +231,17 @@ renderer.setPixelRatio(fixedTime ? 1 : Math.min(devicePixelRatio, PHONE ? 2 : 1.
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NoToneMapping;
 document.body.prepend(renderer.domElement);
+// a phone drops the GPU when the tab sits in the background: the scene goes blank (white on Android) while the tags keep moving.
+// A restored context comes back without its lighting, so the page reloads instead — on the restore, or 2 s after a loss with no
+// restore while the page is in view. At most 3 reloads a minute: past that it stays put rather than loop.
+renderer.domElement.style.background = '#0a0a0a';
+{ let lostT = 0; const KEY = 'village-gl-reloads';
+  const reload = () => { const now = Date.now(), hits = JSON.parse(sessionStorage.getItem(KEY) || '[]').filter((t) => now - t < 60000);
+    if (hits.length >= 3) return; sessionStorage.setItem(KEY, JSON.stringify([...hits, now])); location.reload(); };
+  const check = () => { if (renderer.getContext().isContextLost() && document.visibilityState === 'visible') reload(); };
+  renderer.domElement.addEventListener('webglcontextlost', () => { clearTimeout(lostT); lostT = setTimeout(check, 2000); });
+  renderer.domElement.addEventListener('webglcontextrestored', () => { clearTimeout(lostT); reload(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(check, 500); }); }
 renderer.domElement.style.width = W + 'px'; renderer.domElement.style.height = H + 'px';
 const scene = new THREE.Scene(); scene.background = INK; scene.fog = new THREE.Fog(INK, 300, 700);
 const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
