@@ -26,6 +26,10 @@ canvas { display: block; position: absolute; left: 0; top: 0; }
   border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.04); color: rgba(255,255,255,.82); white-space: nowrap; }
 .btn:hover { background: rgba(255,255,255,.1); color: #fff; }
 .btn:disabled { opacity: .45; cursor: default; }
+#gldead { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; padding: 32px; background: var(--ink); color: var(--paper);
+  font: 700 11px/1.7 Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; text-align: center; cursor: pointer; }
+#gldead.on { display: flex; }
+#gldead b { color: var(--gold-solid); }
 #stamp { position: absolute; left: 12px; top: 56px; z-index: 5; font: 700 9px Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.62); display: flex; gap: 12px; align-items: center;
   background: rgba(10,10,10,.86); border: 1px solid var(--line); border-radius: 5px; padding: 5px 9px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 #stamp b { color: var(--gold-solid); font-weight: 700; }
@@ -161,6 +165,7 @@ body.bare #header, body.bare #stamp, body.bare #legend, body.bare #views, body.b
   <button id="refreshBtn" class="btn" type="button">Refresh<span class="lg"> now</span></button></div>
 </div>
 <div id="stamp"></div>
+<div id="gldead" role="button" tabindex="0"></div>
 <div id="card" class="panel"></div>
 <div id="farmTip" class="panel"></div>
 <div id="scrim"></div>
@@ -225,19 +230,24 @@ const nz = makeNoise(ECO === 'hark' ? 11 : ECO === 'personal' ? 23 : 37);
 
 // ---------- renderer, camera, lights ----------
 const INK = new THREE.Color('#0a0a0a');
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+// the 3D view is down for good (no WebGL, or the reloads are used up): a panel says so and a tap tries again, never a blank page
+const glDead = (why) => { const el = document.getElementById('gldead'); el.innerHTML = `<div>${why}<br><b>tap to reload</b></div>`; el.classList.add('on');
+  el.onclick = () => { sessionStorage.removeItem('village-gl-reloads'); location.reload(); }; };
+if (!document.createElement('canvas').getContext('webgl2')) { glDead('this browser will not start the 3D view'); throw new Error('no WebGL2'); }
+// a phone skips MSAA (it draws at 2x already) and nothing reads the canvas back, so no preserved buffer: less GPU memory on a phone
+const renderer = new THREE.WebGLRenderer({ antialias: !PHONE });
 // a phone's 3x screen draws at 2x (9 px of fill per css px would be 4 there)
 renderer.setPixelRatio(fixedTime ? 1 : Math.min(devicePixelRatio, PHONE ? 2 : 1.5)); renderer.setSize(W, H, false);
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = PHONE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NoToneMapping;
 document.body.prepend(renderer.domElement);
 // a phone drops the GPU when the tab sits in the background: the scene goes blank (white on Android) while the tags keep moving.
 // A restored context comes back without its lighting, so the page reloads instead — on the restore, or 2 s after a loss with no
-// restore while the page is in view. At most 3 reloads a minute: past that it stays put rather than loop.
+// restore while the page is in view. At most 3 reloads a minute: past that the tap-to-reload panel, never a loop.
 renderer.domElement.style.background = '#0a0a0a';
 { let lostT = 0; const KEY = 'village-gl-reloads';
   const reload = () => { const now = Date.now(), hits = JSON.parse(sessionStorage.getItem(KEY) || '[]').filter((t) => now - t < 60000);
-    if (hits.length >= 3) return; sessionStorage.setItem(KEY, JSON.stringify([...hits, now])); location.reload(); };
+    if (hits.length >= 3) return glDead('the phone dropped the 3D view'); sessionStorage.setItem(KEY, JSON.stringify([...hits, now])); location.reload(); };
   const check = () => { if (renderer.getContext().isContextLost() && document.visibilityState === 'visible') reload(); };
   renderer.domElement.addEventListener('webglcontextlost', () => { clearTimeout(lostT); lostT = setTimeout(check, 2000); });
   renderer.domElement.addEventListener('webglcontextrestored', () => { clearTimeout(lostT); reload(); });
