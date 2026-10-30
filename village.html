@@ -30,6 +30,7 @@ canvas { display: block; position: absolute; left: 0; top: 0; }
   font: 700 11px/1.7 Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; text-align: center; cursor: pointer; }
 #gldead.on { display: flex; }
 #gldead b { color: var(--gold-solid); }
+#gldead small { display: block; margin-top: 18px; font: 400 9px/1.6 Menlo, monospace; letter-spacing: .04em; text-transform: none; color: var(--faint); }
 #stamp { position: absolute; left: 12px; top: 56px; z-index: 5; font: 700 9px Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.62); display: flex; gap: 12px; align-items: center;
   background: rgba(10,10,10,.86); border: 1px solid var(--line); border-radius: 5px; padding: 5px 9px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 #stamp b { color: var(--gold-solid); font-weight: 700; }
@@ -230,31 +231,41 @@ const nz = makeNoise(ECO === 'hark' ? 11 : ECO === 'personal' ? 23 : 37);
 
 // ---------- renderer, camera, lights ----------
 const INK = new THREE.Color('#0a0a0a');
-// the 3D view is down for good (no WebGL, or the reloads are used up): a panel says so and a tap tries again, never a blank page
-const glDead = (why) => { const el = document.getElementById('gldead'); el.innerHTML = `<div>${why}<br><b>tap to reload</b></div>`; el.classList.add('on');
-  el.onclick = () => { sessionStorage.removeItem('village-gl-reloads'); location.reload(); }; };
-if (!document.createElement('canvas').getContext('webgl2')) { glDead('this browser will not start the 3D view'); throw new Error('no WebGL2'); }
-// a phone skips MSAA (it draws at 2x already) and nothing reads the canvas back, so no preserved buffer: less GPU memory on a phone
-const renderer = new THREE.WebGLRenderer({ antialias: !PHONE });
-// a phone's 3x screen draws at 2x (9 px of fill per css px would be 4 there)
-renderer.setPixelRatio(fixedTime ? 1 : Math.min(devicePixelRatio, PHONE ? 2 : 1.5)); renderer.setSize(W, H, false);
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = PHONE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+// The 3D view on a fragile GPU (Max 10/29, Pixel 10: the scene went white, then Chrome switched 3D off for the whole
+// public domain — village and globe — after the GPU crashes). A loss is written to localStorage (it outlives a
+// Chrome restart) and reloads ONCE, into light mode: no shadows, no environment lighting, 1.5x. A loss in light mode shows the
+// panel, never another reload (each crash counts toward Chrome's block). A phone with a loss on record, or a PowerVR GPU
+// (the Pixel 10), starts in light mode. The panel carries a diagnostic line: a screenshot of it is the only device log.
+// LIGHT_HEMI: the hemisphere light's lift in light mode, standing in for the missing environment light (a knob: matched by frame mean)
+const LIGHT_HEMI = 1.45;
+const GL_KEY = 'village-gl-loss', GL_FRESH = 7 * 864e5;
+const glLoss = (() => { try { const r = JSON.parse(localStorage.getItem(GL_KEY) || 'null'); return r && Date.now() - r.at < GL_FRESH ? r : null; } catch { return null; } })();
+const glDead = (why) => { const el = document.getElementById('gldead'), r = glLoss && `last loss ${new Date(glLoss.at).toLocaleString()} · ${glLoss.mode} · ${glLoss.lod} · ${glLoss.secs}s in`;
+  const gl1 = (() => { try { return !!document.createElement('canvas').getContext('webgl'); } catch { return false; } })();
+  el.innerHTML = `<div>${why}<br><b>tap to reload</b><small>webgl2 ${renderer ? 'yes' : 'no'} · webgl1 ${gl1 ? 'yes' : 'no'}${glLoss ? ' · ' + glLoss.gpu : ''}${r ? '<br>' + r : ''}</small></div>`;
+  el.classList.add('on'); el.onclick = () => location.reload(); };
+let renderer = null;
+try { renderer = new THREE.WebGLRenderer({ antialias: !PHONE }); } catch {}
+if (!renderer) { glDead(glLoss ? 'Chrome is holding 3D off after the graphics chip crashed — it comes back when Chrome restarts' : 'this browser will not start the 3D view'); throw new Error('no WebGL2'); }
+const GPU = (() => { const gl = renderer.getContext(), x = gl.getExtension('WEBGL_debug_renderer_info'); return String(x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); })();
+const LIGHT = !fixedTime && (q.get('light') === '1' || (q.get('light') !== '0' && PHONE && (!!glLoss || !!GPU.match(/PowerVR|Imagination/i))));
+// a phone's 3x screen draws at 2x (9 px of fill per css px would be 4 there); light mode 1.5x
+renderer.setPixelRatio(fixedTime ? 1 : Math.min(devicePixelRatio, LIGHT ? 1.5 : PHONE ? 2 : 1.5)); renderer.setSize(W, H, false);
+renderer.shadowMap.enabled = !LIGHT; renderer.shadowMap.type = PHONE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NoToneMapping;
 document.body.prepend(renderer.domElement);
-// a phone drops the GPU when the tab sits in the background: the scene goes blank (white on Android) while the tags keep moving.
-// A restored context comes back without its lighting, so the page reloads instead — on the restore, or 2 s after a loss with no
-// restore while the page is in view. At most 3 reloads a minute: past that the tap-to-reload panel, never a loop.
 renderer.domElement.style.background = '#0a0a0a';
-{ let lostT = 0; const KEY = 'village-gl-reloads';
-  const reload = () => { const now = Date.now(), hits = JSON.parse(sessionStorage.getItem(KEY) || '[]').filter((t) => now - t < 60000);
-    if (hits.length >= 3) return glDead('the phone dropped the 3D view'); sessionStorage.setItem(KEY, JSON.stringify([...hits, now])); location.reload(); };
-  const check = () => { if (renderer.getContext().isContextLost() && document.visibilityState === 'visible') reload(); };
+{ let lostT = 0, armed = true; const t0 = performance.now();
+  const lost = () => { if (!armed) return; armed = false;
+    try { localStorage.setItem(GL_KEY, JSON.stringify({ at: Date.now(), mode: LIGHT ? 'light' : 'full', lod: (() => { try { return lod; } catch { return '?'; } })(), secs: Math.round((performance.now() - t0) / 1000), gpu: GPU })); } catch {}
+    if (LIGHT) glDead('the phone dropped the 3D view, even in light mode'); else location.reload(); };
+  const check = () => { if (renderer.getContext().isContextLost() && document.visibilityState === 'visible') lost(); };
   renderer.domElement.addEventListener('webglcontextlost', () => { clearTimeout(lostT); lostT = setTimeout(check, 2000); });
-  renderer.domElement.addEventListener('webglcontextrestored', () => { clearTimeout(lostT); reload(); });
+  renderer.domElement.addEventListener('webglcontextrestored', () => { clearTimeout(lostT); lost(); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(check, 500); }); }
 renderer.domElement.style.width = W + 'px'; renderer.domElement.style.height = H + 'px';
 const scene = new THREE.Scene(); scene.background = INK; scene.fog = new THREE.Fog(INK, 300, 700);
-const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+if (!LIGHT) { const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; }
 const camera = new THREE.PerspectiveCamera(36, W / H, 0.5, 2000);
 // a phone held upright: a 36° vertical lens is only 17° across, and the island would need a telephoto from far off (blurred,
 // past the zoom limit). There the lens widens until it is about 34° across (at most 62° tall); everywhere else it is 36°.
@@ -1984,7 +1995,7 @@ const looks = {
 };
 function applyLook() {
   const L = looks[K.look] || looks.day;
-  hemi.color.set(L.sky); hemi.groundColor.set(L.ground); hemi.intensity = L.hemi; sun.color.set(L.sun); sun.intensity = L.sunI;
+  hemi.color.set(L.sky); hemi.groundColor.set(L.ground); hemi.intensity = L.hemi * (LIGHT ? LIGHT_HEMI : 1); sun.color.set(L.sun); sun.intensity = L.sunI;
   lampU.value = L.lamp * 0.35; lampLitU.value = Math.max(0.6, L.lamp); buildMat.envMapIntensity = buildLitMat.envMapIntensity = L.env; waterPtsMat.uniforms.uGain.value = 0.75 + 0.25 * L.glow;
 }
 function applyLayout() { document.body.classList.toggle('minimal', K.layout === 'minimal'); document.body.classList.toggle('bare', K.layout === 'scene only'); }
@@ -2335,7 +2346,7 @@ window.__tapPoint = id => { const ids = id ? [id] : [...(world?.bs.keys() || [])
     const onTag = tapRects.some(([r]) => x > r[0] - 8 && x < r[0] + r[2] + 8 && y > r[1] - 8 && y < r[1] + r[3] + 8);
     if (s.ok && x > 0 && x < W && y > 0 && y < H && (id || (!onTag && document.elementFromPoint(x, y) === renderer.domElement))) return [x, y, k]; }
   return null; };
-window.__villageState = () => ({ source, eco: ECO, frames, lod, pollMs: POLL_MS, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, places: world ? world.bs.size + houses.size : 0,
+window.__villageState = () => ({ source, eco: ECO, frames, lod, light: LIGHT, gpu: GPU, pollMs: POLL_MS, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, places: world ? world.bs.size + houses.size : 0,
   working: lastState.working, idle: lastState.idle, walking: lastState.walking, replay: lastState.replay, payloadWorking: lastState.payloadWorking,
   cam: camera.position.toArray().map(v => +v.toFixed(2)), target: camTgt().toArray().map(v => +v.toFixed(2)), flying: !!flight, untouched,
   district: focusD, zoom: world ? camera.position.distanceTo(controls ? controls.target : camTarget) / (world.fitDist || 200) : null });
