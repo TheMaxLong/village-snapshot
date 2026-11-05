@@ -1,7 +1,7 @@
 // knobs.js — the Tune contract every Creator piece shares (a classic script: pages open as file:// too).
 //   Knobs.add({ id, label, group, type: 'color' | 'range' | 'asset' | 'text' | 'toggle' | 'choice', value, min, max, step, accept, maxLength, options }, apply)
 //   toggle: an on/off switch, value 0 or 1 (a number, so looks saved from the old 0/1 sliders still apply); choice: one of
-//   options (strings), drawn as a dropdown. Older pages that wrote a toggle as a 0–1 step-1 range, or a choice as a text knob
+//   options (strings), drawn as a dropdown (optional groups: { 'Family': [options…] } sorts a long one into families). Older pages that wrote a toggle as a 0–1 step-1 range, or a choice as a text knob
 //   labelled "(a / b / c)", are drawn as a switch / dropdown by The Creator without changing the page. apply(v) changes
 //   the piece; it may return a promise (loading a picture or a splat). An 'asset' knob's value is a path under
 //   assets/uploads (a file dropped into The Creator), worlds/builds (a model The Creator rebuilt) or '' for the piece's own
